@@ -1,14 +1,19 @@
 "use client";
 
 import type { FormEvent } from "react";
+import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PasswordField } from "@/features/auth/password-field";
 
 export function LoginForm() {
+  const router = useRouter();
+
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    // Temporary UI-phase navigation; Firebase Authentication will replace this.
+    router.push("/dashboard");
   }
 
   return (
