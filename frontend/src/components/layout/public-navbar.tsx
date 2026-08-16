@@ -5,13 +5,14 @@ import { useState } from "react";
 
 import { Brand } from "@/components/shared/brand";
 import { Container } from "@/components/layout/container";
+import { buttonStyles } from "@/components/ui/button";
 import { cn } from "@/lib/cn";
 import type { NavigationItem } from "@/types";
 
 const defaultItems: NavigationItem[] = [
   { label: "Home", href: "#top", active: true },
-  { label: "Book Parking", href: "#parking-slots" },
-  { label: "Login", href: "#form-controls" },
+  { label: "How It Works", href: "#how-it-works" },
+  { label: "Login", href: "#get-started" },
 ];
 
 interface PublicNavbarProps {
@@ -21,7 +22,7 @@ interface PublicNavbarProps {
 
 export function PublicNavbar({
   items = defaultItems,
-  ctaHref = "#components",
+  ctaHref = "#get-started",
 }: PublicNavbarProps) {
   const [open, setOpen] = useState(false);
 
@@ -49,7 +50,7 @@ export function PublicNavbar({
             ))}
             <a
               href={ctaHref}
-              className="ml-2 inline-flex h-10 items-center justify-center rounded-lg bg-slate-900 px-4 text-sm font-semibold text-white transition-colors hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-blue-600/25"
+              className={buttonStyles({ size: "sm", className: "ml-2" })}
             >
               Get Started
             </a>
@@ -87,7 +88,7 @@ export function PublicNavbar({
             <a
               href={ctaHref}
               onClick={() => setOpen(false)}
-              className="mt-2 inline-flex h-11 items-center justify-center rounded-lg bg-slate-900 px-4 text-sm font-semibold text-white focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-blue-600/25"
+              className={buttonStyles({ className: "mt-2" })}
             >
               Get Started
             </a>

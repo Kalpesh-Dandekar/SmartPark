@@ -15,8 +15,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "SmartPark",
-  description: "IoT-based smart parking reservation and management system",
+  title: "SmartPark | Find parking before you arrive",
+  description:
+    "See live parking availability, reserve ahead, and arrive knowing your space is waiting.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

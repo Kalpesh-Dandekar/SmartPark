@@ -2,13 +2,13 @@ import type { ButtonHTMLAttributes } from "react";
 
 import { cn } from "@/lib/cn";
 
-type ButtonVariant =
+export type ButtonVariant =
   | "primary"
   | "secondary"
   | "outline"
   | "ghost"
   | "destructive";
-type ButtonSize = "sm" | "md" | "lg";
+export type ButtonSize = "sm" | "md" | "lg";
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant;
@@ -34,6 +34,23 @@ const sizeClasses: Record<ButtonSize, string> = {
   lg: "h-12 px-5 text-base",
 };
 
+export function buttonStyles({
+  variant = "primary",
+  size = "md",
+  className,
+}: {
+  variant?: ButtonVariant;
+  size?: ButtonSize;
+  className?: string;
+} = {}) {
+  return cn(
+    "inline-flex shrink-0 items-center justify-center gap-2 rounded-lg font-semibold transition-colors focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-blue-600/25 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50",
+    variantClasses[variant],
+    sizeClasses[size],
+    className,
+  );
+}
+
 export function Button({
   className,
   variant = "primary",
@@ -44,12 +61,7 @@ export function Button({
   return (
     <button
       type={type}
-      className={cn(
-        "inline-flex shrink-0 items-center justify-center gap-2 rounded-lg font-semibold transition-colors focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-blue-600/25 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50",
-        variantClasses[variant],
-        sizeClasses[size],
-        className,
-      )}
+      className={buttonStyles({ variant, size, className })}
       {...props}
     />
   );
