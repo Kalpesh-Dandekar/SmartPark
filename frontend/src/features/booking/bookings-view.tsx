@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarPlus, Clock3, QrCode, TriangleAlert, X } from "lucide-react";
+import { CalendarPlus, CheckCircle2, Clock3, QrCode, TriangleAlert, X } from "lucide-react";
 import Link from "next/link";
 import { useRef, useState } from "react";
 import QRCode from "react-qr-code";
@@ -12,7 +12,9 @@ import { Button, buttonStyles } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { mockBookings, mockParkingSlots, mockUser } from "@/data/mock";
-import type { Booking } from "@/types";
+import type { Booking, LateReservationStatus } from "@/types";
+
+type UserLateArrivalStatus = LateReservationStatus | "on-the-way";
 
 export function BookingsView() {
   const booking = mockBookings.find((item) => item.status === "reserved");
@@ -46,7 +48,7 @@ export function BookingsView() {
               <CurrentBooking booking={booking} onCancel={() => dialogRef.current?.showModal()} />
               <div className="space-y-6">
                 <BookingQr booking={booking} />
-                <GracePeriod booking={booking} />
+                <LateArrivalPanel booking={booking} onCancel={() => dialogRef.current?.showModal()} />
               </div>
             </div>
           )}
@@ -106,11 +108,83 @@ function BookingQr({ booking }: { booking: Booking }) {
   );
 }
 
-function GracePeriod({ booking }: { booking: Booking }) {
+function LateArrivalPanel({ booking, onCancel }: { booking: Booking; onCancel: () => void }) {
+  const [status, setStatus] = useState<UserLateArrivalStatus>("grace-period");
+  const [showRequest, setShowRequest] = useState(false);
+  const [extension, setExtension] = useState("10");
+  const [reason, setReason] = useState("Traffic delay");
   const deadline = new Date(new Date(booking.startsAt).getTime() + 10 * 60 * 1000);
+  const extendedDeadline = new Date(deadline.getTime() + Number(extension) * 60 * 1000);
+
+  if (status === "released") {
+    return (
+      <div className="rounded-xl border border-red-200 bg-red-50 p-5" role="status">
+        <h2 className="font-semibold text-red-950">Reservation Released</h2>
+        <p className="mt-2 text-sm leading-6 text-red-900">Slot {getSlotLabel(booking.slotId)} is now available for another user.</p>
+        <div className="mt-4"><StatusBadge status="available" /></div>
+      </div>
+    );
+  }
+
+  if (status === "expired") {
+    return (
+      <div className="rounded-xl border border-red-200 bg-red-50 p-5" role="status">
+        <h2 className="font-semibold text-red-950">Reservation Expired</h2>
+        <p className="mt-2 text-sm leading-6 text-red-900">No arrival or extension response was received within the allowed grace period.</p>
+        <p className="mt-2 text-sm font-semibold text-red-950">Slot {getSlotLabel(booking.slotId)} has been released.</p>
+        <Button variant="destructive" className="mt-4 w-full" onClick={() => setStatus("released")}>Show Released Slot</Button>
+      </div>
+    );
+  }
+
+  if (status === "extension-requested") {
+    return (
+      <div className="rounded-xl border border-amber-200 bg-amber-50 p-5" role="status">
+        <h2 className="font-semibold text-amber-950">Extension Requested</h2>
+        <p className="mt-2 text-sm leading-6 text-amber-900">Your request for {extension} additional minutes is awaiting a response.</p>
+        <p className="mt-2 text-xs text-amber-800">Demo state only—no request was sent.</p>
+        <Button variant="outline" className="mt-4 w-full" onClick={() => setStatus("extended")}>Preview Approval</Button>
+      </div>
+    );
+  }
+
+  if (status === "extended") {
+    return (
+      <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-5" role="status">
+        <div className="flex gap-3"><CheckCircle2 className="mt-0.5 size-5 shrink-0 text-emerald-700" aria-hidden="true" /><div><h2 className="font-semibold text-emerald-950">Extension Approved</h2><p className="mt-1 text-sm text-emerald-900">New arrival deadline: {formatTime(extendedDeadline)}</p><p className="mt-2 text-xs text-emerald-800">Deterministic UI preview; no admin or backend action occurred.</p></div></div>
+      </div>
+    );
+  }
+
+  if (status === "on-the-way") {
+    return (
+      <div className="rounded-xl border border-blue-200 bg-blue-50 p-5" role="status">
+        <h2 className="font-semibold text-blue-950">On-the-way status noted</h2>
+        <p className="mt-2 text-sm leading-6 text-blue-900">Your reservation remains held until {formatTime(deadline)}. Please arrive within the grace period.</p>
+        <p className="mt-2 text-xs text-blue-800">Local UI preview only—no notification was sent.</p>
+      </div>
+    );
+  }
+
   return (
     <div className="rounded-xl border border-amber-200 bg-amber-50 p-5">
-      <div className="flex gap-3"><TriangleAlert className="mt-0.5 size-5 shrink-0 text-amber-700" aria-hidden="true" /><div><h2 className="font-semibold text-amber-950">Arrive before {formatTime(deadline)}</h2><p className="mt-1 text-sm leading-6 text-amber-900">If you do not arrive within the grace period, your reservation may be released.</p></div></div>
+      <div className="flex gap-3"><TriangleAlert className="mt-0.5 size-5 shrink-0 text-amber-700" aria-hidden="true" /><div><h2 className="font-semibold text-amber-950">You&apos;re running late</h2><p className="mt-1 text-sm leading-6 text-amber-900">Your reservation is still being held until {formatTime(deadline)}.</p><p className="mt-2 text-sm font-semibold text-amber-950">Need more time?</p></div></div>
+
+      {showRequest ? (
+        <form className="mt-5 rounded-lg border border-amber-200 bg-white/70 p-4" onSubmit={(event) => { event.preventDefault(); setStatus("extension-requested"); }}>
+          <h3 className="font-semibold text-slate-950">Request an extension</h3>
+          <label className="mt-4 block text-sm font-medium text-slate-800">Additional time<select value={extension} onChange={(event) => setExtension(event.target.value)} className="mt-2 h-11 w-full rounded-lg border border-slate-300 bg-white px-3.5 text-sm outline-none focus:border-blue-600 focus:ring-3 focus:ring-blue-600/15"><option value="5">5 minutes</option><option value="10">10 minutes</option><option value="15">15 minutes</option></select></label>
+          <label className="mt-4 block text-sm font-medium text-slate-800">Reason <span className="font-normal text-slate-500">(optional)</span><input value={reason} onChange={(event) => setReason(event.target.value)} className="mt-2 h-11 w-full rounded-lg border border-slate-300 bg-white px-3.5 text-sm outline-none focus:border-blue-600 focus:ring-3 focus:ring-blue-600/15" /></label>
+          <Button type="submit" className="mt-4 w-full">Request Extension</Button>
+        </form>
+      ) : (
+        <div className="mt-5 grid gap-2">
+          <Button onClick={() => setStatus("on-the-way")}>I&apos;m on the way</Button>
+          <Button variant="outline" onClick={() => setShowRequest(true)}>Request More Time</Button>
+          <Button variant="ghost" className="text-red-700" onClick={onCancel}>Cancel Reservation</Button>
+          <button type="button" onClick={() => setStatus("expired")} className="mt-1 rounded-md text-xs font-medium text-slate-500 underline underline-offset-4 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-blue-600/25">Preview no-response expiry</button>
+        </div>
+      )}
     </div>
   );
 }

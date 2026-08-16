@@ -11,6 +11,7 @@ interface ParkingSlotProps {
   status: ParkingSlotStatus;
   selected?: boolean;
   onClick?: () => void;
+  allowUnavailableSelection?: boolean;
   className?: string;
 }
 
@@ -19,10 +20,11 @@ export function ParkingSlot({
   status,
   selected = false,
   onClick,
+  allowUnavailableSelection = false,
   className,
 }: ParkingSlotProps) {
   const style = getParkingSlotStyle(status);
-  const interactive = Boolean(onClick) && status === "available";
+  const interactive = Boolean(onClick) && (status === "available" || allowUnavailableSelection);
   const content = (
     <>
       <span className="font-mono text-lg font-bold tracking-tight">{label}</span>

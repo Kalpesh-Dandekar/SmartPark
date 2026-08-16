@@ -50,3 +50,26 @@ export interface NavigationItem {
   href: string;
   active?: boolean;
 }
+
+export type LateReservationStatus =
+  | "grace-period"
+  | "extension-requested"
+  | "extended"
+  | "expired"
+  | "released";
+
+export interface LateReservation {
+  id: string;
+  userName: string;
+  slotId: string;
+  expectedAt: string;
+  graceUntil: string;
+  status: LateReservationStatus;
+  requestedExtensionMinutes?: 5 | 10 | 15;
+}
+
+export interface AdminActivity {
+  id: string;
+  occurredAt: string;
+  description: string;
+}

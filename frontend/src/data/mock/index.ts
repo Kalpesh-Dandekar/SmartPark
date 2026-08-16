@@ -1,4 +1,11 @@
-import type { Booking, ParkingActivity, ParkingSlot, User } from "@/types";
+import type {
+  AdminActivity,
+  Booking,
+  LateReservation,
+  ParkingActivity,
+  ParkingSlot,
+  User,
+} from "@/types";
 
 export const mockUser: User = {
   id: "user-001",
@@ -78,4 +85,30 @@ export const mockParkingActivity: ParkingActivity[] = [
     occurredAt: "2026-08-11T10:15:00+05:30",
     status: "maintenance",
   },
+];
+
+export const mockLateReservations: LateReservation[] = [
+  {
+    id: "SP-1042",
+    userName: "Aarav Mehta",
+    slotId: "slot-p3",
+    expectedAt: "2026-08-17T10:00:00+05:30",
+    graceUntil: "2026-08-17T10:10:00+05:30",
+    status: "extension-requested",
+    requestedExtensionMinutes: 10,
+  },
+  {
+    id: "SP-1038",
+    userName: "Alex Morgan",
+    slotId: "slot-p5",
+    expectedAt: "2026-08-17T10:00:00+05:30",
+    graceUntil: "2026-08-17T10:10:00+05:30",
+    status: "grace-period",
+  },
+];
+
+export const mockLateArrivalActivity: AdminActivity[] = [
+  { id: "late-001", occurredAt: "2026-08-17T10:05:00+05:30", description: "Late-arrival warning sent for P3" },
+  { id: "late-002", occurredAt: "2026-08-17T10:08:00+05:30", description: "Extension requested for P3" },
+  { id: "late-003", occurredAt: "2026-08-17T10:10:00+05:30", description: "Reservation SP-1038 reached its grace deadline" },
 ];
