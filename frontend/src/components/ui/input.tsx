@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, type InputHTMLAttributes } from "react";
+import { useId, type InputHTMLAttributes, type ReactNode } from "react";
 
 import { cn } from "@/lib/cn";
 
@@ -8,6 +8,7 @@ export interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   label?: string;
   error?: string;
   helperText?: string;
+  trailingAction?: ReactNode;
 }
 
 export function Input({
@@ -15,6 +16,7 @@ export function Input({
   label,
   error,
   helperText,
+  trailingAction,
   className,
   disabled,
   ...props
@@ -34,18 +36,26 @@ export function Input({
           {label}
         </label>
       ) : null}
-      <input
-        id={inputId}
-        disabled={disabled}
-        aria-invalid={Boolean(error)}
-        aria-describedby={descriptionId}
-        className={cn(
-          "h-11 w-full rounded-lg border border-slate-300 bg-white px-3.5 text-base text-slate-950 outline-none transition-colors placeholder:text-slate-400 focus:border-blue-600 focus:ring-3 focus:ring-blue-600/15 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500 sm:text-sm",
-          error && "border-red-500 focus:border-red-600 focus:ring-red-600/15",
-          className,
-        )}
-        {...props}
-      />
+      <div className="relative">
+        <input
+          id={inputId}
+          disabled={disabled}
+          aria-invalid={Boolean(error)}
+          aria-describedby={descriptionId}
+          className={cn(
+            "h-11 w-full rounded-lg border border-slate-300 bg-white px-3.5 text-base text-slate-950 outline-none transition-colors placeholder:text-slate-400 focus:border-blue-600 focus:ring-3 focus:ring-blue-600/15 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500 sm:text-sm",
+            Boolean(trailingAction) && "pr-12",
+            error && "border-red-500 focus:border-red-600 focus:ring-red-600/15",
+            className,
+          )}
+          {...props}
+        />
+        {trailingAction ? (
+          <div className="absolute inset-y-0 right-1 flex items-center">
+            {trailingAction}
+          </div>
+        ) : null}
+      </div>
       {description ? (
         <p
           id={descriptionId}

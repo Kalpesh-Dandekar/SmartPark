@@ -1,6 +1,7 @@
 "use client";
 
 import { Menu, X } from "lucide-react";
+import Link from "next/link";
 import { useState } from "react";
 
 import { Brand } from "@/components/shared/brand";
@@ -12,7 +13,7 @@ import type { NavigationItem } from "@/types";
 const defaultItems: NavigationItem[] = [
   { label: "Home", href: "#top", active: true },
   { label: "How It Works", href: "#how-it-works" },
-  { label: "Login", href: "#get-started" },
+  { label: "Login", href: "/login" },
 ];
 
 interface PublicNavbarProps {
@@ -22,7 +23,7 @@ interface PublicNavbarProps {
 
 export function PublicNavbar({
   items = defaultItems,
-  ctaHref = "#get-started",
+  ctaHref = "/register",
 }: PublicNavbarProps) {
   const [open, setOpen] = useState(false);
 
@@ -36,7 +37,7 @@ export function PublicNavbar({
 
           <nav className="hidden items-center gap-1 md:flex" aria-label="Public navigation">
             {items.map((item) => (
-              <a
+              <Link
                 key={item.label}
                 href={item.href}
                 aria-current={item.active ? "page" : undefined}
@@ -46,14 +47,14 @@ export function PublicNavbar({
                 )}
               >
                 {item.label}
-              </a>
+              </Link>
             ))}
-            <a
+            <Link
               href={ctaHref}
               className={buttonStyles({ size: "sm", className: "ml-2" })}
             >
               Get Started
-            </a>
+            </Link>
           </nav>
 
           <button
@@ -75,7 +76,7 @@ export function PublicNavbar({
         >
           <div className="flex flex-col gap-1">
             {items.map((item) => (
-              <a
+              <Link
                 key={item.label}
                 href={item.href}
                 aria-current={item.active ? "page" : undefined}
@@ -83,15 +84,15 @@ export function PublicNavbar({
                 className="rounded-lg px-3 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-blue-600/25"
               >
                 {item.label}
-              </a>
+              </Link>
             ))}
-            <a
+            <Link
               href={ctaHref}
               onClick={() => setOpen(false)}
               className={buttonStyles({ className: "mt-2" })}
             >
               Get Started
-            </a>
+            </Link>
           </div>
         </nav>
       </Container>
