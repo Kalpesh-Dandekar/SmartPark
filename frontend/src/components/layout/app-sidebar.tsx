@@ -1,3 +1,5 @@
+"use client";
+
 import {
   CalendarPlus,
   LayoutDashboard,
@@ -5,15 +7,16 @@ import {
   TicketCheck,
 } from "lucide-react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 import { Brand } from "@/components/shared/brand";
 import { cn } from "@/lib/cn";
 import type { User } from "@/types";
 
 const navigation = [
-  { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, active: true },
-  { label: "Book a Slot", href: "/book", icon: CalendarPlus, disabled: true },
-  { label: "My Bookings", href: "/bookings", icon: TicketCheck, disabled: true },
+  { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+  { label: "Book a Slot", href: "/book", icon: CalendarPlus },
+  { label: "My Bookings", href: "/bookings", icon: TicketCheck },
 ];
 
 interface AppSidebarProps {
@@ -22,6 +25,7 @@ interface AppSidebarProps {
 }
 
 export function AppSidebar({ user, onNavigate }: AppSidebarProps) {
+  const pathname = usePathname();
   const initials = user.name
     .trim()
     .split(/\s+/)
@@ -44,35 +48,23 @@ export function AppSidebar({ user, onNavigate }: AppSidebarProps) {
         {navigation.map((item) => {
           const Icon = item.icon;
 
-          if (item.disabled) {
-            return (
-              <span
-                key={item.label}
-                aria-disabled="true"
-                title="Coming in a future milestone"
-                className="flex cursor-not-allowed items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-slate-400"
-              >
-                <Icon className="size-4.5" aria-hidden="true" />
-                {item.label}
-              </span>
-            );
-          }
+          const active = pathname === item.href;
 
           return (
             <Link
               key={item.label}
               href={item.href}
               onClick={onNavigate}
-              aria-current={item.active ? "page" : undefined}
+              aria-current={active ? "page" : undefined}
               className={cn(
                 "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-blue-600/25",
-                item.active
+                active
                   ? "bg-slate-100 text-slate-950"
                   : "text-slate-600 hover:bg-slate-50 hover:text-slate-950",
               )}
             >
               <Icon
-                className={cn("size-4.5", item.active && "text-blue-700")}
+                className={cn("size-4.5", active && "text-blue-700")}
                 aria-hidden="true"
               />
               {item.label}

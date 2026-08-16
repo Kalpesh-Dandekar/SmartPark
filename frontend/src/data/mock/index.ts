@@ -19,12 +19,12 @@ export const mockParkingSlots: ParkingSlot[] = [
 
 export const mockBookings: Booking[] = [
   {
-    id: "BK-2026-1048",
+    id: "SP-1042",
     userId: "user-001",
     slotId: "slot-p3",
     vehicleNumber: "MH 12 AB 4582",
-    startsAt: "2026-08-18T09:30:00+05:30",
-    endsAt: "2026-08-18T11:30:00+05:30",
+    startsAt: "2026-08-17T10:00:00+05:30",
+    endsAt: "2026-08-17T12:00:00+05:30",
     status: "reserved",
   },
   {
@@ -35,6 +35,24 @@ export const mockBookings: Booking[] = [
     startsAt: "2026-08-12T14:00:00+05:30",
     endsAt: "2026-08-12T16:00:00+05:30",
     status: "completed",
+  },
+  {
+    id: "SP-0971",
+    userId: "user-001",
+    slotId: "slot-p1",
+    vehicleNumber: "MH 12 AB 4582",
+    startsAt: "2026-08-09T09:30:00+05:30",
+    endsAt: "2026-08-09T10:30:00+05:30",
+    status: "completed",
+  },
+  {
+    id: "SP-0938",
+    userId: "user-001",
+    slotId: "slot-p4",
+    vehicleNumber: "MH 12 AB 4582",
+    startsAt: "2026-08-04T14:00:00+05:30",
+    endsAt: "2026-08-04T15:00:00+05:30",
+    status: "cancelled",
   },
 ];
 

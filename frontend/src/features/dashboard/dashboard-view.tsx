@@ -8,12 +8,13 @@ import {
   Route,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import Link from "next/link";
 
 import { AppShell } from "@/components/layout/app-shell";
 import { Container } from "@/components/layout/container";
 import { PageHeader } from "@/components/layout/page-header";
 import { ParkingSlot } from "@/components/shared/parking-slot";
-import { Button } from "@/components/ui/button";
+import { buttonStyles } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatusBadge } from "@/components/ui/status-badge";
 import {
@@ -74,9 +75,7 @@ export function DashboardView() {
             title="Dashboard"
             description={`Good evening, ${firstName}. Here's the current parking availability.`}
             action={
-              <Button disabled title="Booking will be available in a future milestone">
-                Book a Slot
-              </Button>
+              <Link href="/book" className={buttonStyles()}>Book a Slot</Link>
             }
           />
 
@@ -233,14 +232,9 @@ function UpcomingBooking() {
           </p>
         </div>
 
-        <Button
-          variant="outline"
-          className="mt-5 w-full"
-          disabled
-          title="Booking details will be available in a future milestone"
-        >
+        <Link href="/bookings" className={buttonStyles({ variant: "outline", className: "mt-5 w-full" })}>
           View Booking
-        </Button>
+        </Link>
       </CardContent>
     </Card>
   );
@@ -313,14 +307,9 @@ function QuickBooking() {
             Reserve a slot before you arrive and skip the search.
           </p>
         </div>
-        <Button
-          variant="outline"
-          className="mt-7 w-full border-white bg-white text-slate-950 hover:border-slate-200 hover:bg-slate-100"
-          disabled
-          title="Booking will be available in a future milestone"
-        >
+        <Link href="/book" className={buttonStyles({ variant: "outline", className: "mt-7 w-full border-white bg-white text-slate-950 hover:border-slate-200 hover:bg-slate-100" })}>
           Book a Slot
-        </Button>
+        </Link>
       </CardContent>
     </Card>
   );
