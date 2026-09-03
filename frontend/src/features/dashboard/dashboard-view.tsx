@@ -1,3 +1,5 @@
+"use client";
+
 import {
   CalendarClock,
   CarFront,
@@ -9,6 +11,7 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import Link from "next/link";
+import { useEffect, useState } from "react";
 
 import { AppShell } from "@/components/layout/app-shell";
 import { Container } from "@/components/layout/container";
@@ -17,55 +20,29 @@ import { ParkingSlot } from "@/components/shared/parking-slot";
 import { buttonStyles } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { useAuth } from "@/features/auth/auth-provider";
 import {
-  mockBookings,
   mockParkingActivity,
-  mockParkingSlots,
   mockUser,
 } from "@/data/mock";
 import { cn } from "@/lib/cn";
 import { statusStyles } from "@/lib/status";
-
-const summaryItems: Array<{
-  label: string;
-  value: string;
-  icon: LucideIcon;
-  style: string;
-}> = [
-  {
-    label: "Available",
-    value: String(
-      mockParkingSlots.filter((slot) => slot.status === "available").length,
-    ),
-    icon: CheckCircle2,
-    style: "bg-emerald-50 text-emerald-700",
-  },
-  {
-    label: "Occupied",
-    value: String(
-      mockParkingSlots.filter((slot) => slot.status === "occupied").length,
-    ),
-    icon: CarFront,
-    style: "bg-red-50 text-red-700",
-  },
-  {
-    label: "Reserved",
-    value: String(
-      mockParkingSlots.filter((slot) => slot.status === "reserved").length,
-    ),
-    icon: CalendarClock,
-    style: "bg-blue-50 text-blue-700",
-  },
-  {
-    label: "Total slots",
-    value: String(mockParkingSlots.length),
-    icon: CircleParking,
-    style: "bg-slate-100 text-slate-700",
-  },
-];
+import { getMyReservations } from "@/services/reservations";
+import { getSlots } from "@/services/slots";
+import type { ApiParkingSlot, ApiReservation, ParkingSlotStatus } from "@/types";
 
 export function DashboardView() {
-  const firstName = mockUser.name.split(" ")[0];
+  const { profile } = useAuth();
+  const firstName = (profile?.name ?? mockUser.name).split(" ")[0];
+  const [slots, setSlots] = useState<ApiParkingSlot[]>([]);
+  const [bookings, setBookings] = useState<ApiReservation[]>([]);
+  useEffect(() => { Promise.all([getSlots(), getMyReservations()]).then(([nextSlots, nextBookings]) => { setSlots(nextSlots); setBookings(nextBookings); }).catch(() => undefined); }, []);
+  const summaryItems = [
+    { label: "Available", value: String(slots.filter((slot) => slot.status === "AVAILABLE").length), icon: CheckCircle2, style: "bg-emerald-50 text-emerald-700" },
+    { label: "Occupied", value: String(slots.filter((slot) => slot.status === "OCCUPIED").length), icon: CarFront, style: "bg-red-50 text-red-700" },
+    { label: "Reserved", value: String(slots.filter((slot) => slot.status === "RESERVED").length), icon: CalendarClock, style: "bg-blue-50 text-blue-700" },
+    { label: "Total slots", value: String(slots.length), icon: CircleParking, style: "bg-slate-100 text-slate-700" },
+  ];
 
   return (
     <AppShell user={mockUser}>
@@ -91,8 +68,8 @@ export function DashboardView() {
           </section>
 
           <div className="mt-6 grid items-start gap-6 lg:grid-cols-[minmax(0,1.65fr)_minmax(19rem,0.75fr)]">
-            <LiveParking />
-            <UpcomingBooking />
+            <LiveParking slots={slots} />
+            <UpcomingBooking booking={bookings.find((item) => item.status === "ACTIVE")} />
           </div>
 
           <div className="mt-6 grid items-stretch gap-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(18rem,0.65fr)]">
@@ -133,7 +110,7 @@ function SummaryCard({
   );
 }
 
-function LiveParking() {
+function LiveParking({ slots }: { slots: ApiParkingSlot[] }) {
   return (
     <Card className="overflow-hidden">
       <CardHeader className="flex flex-row items-start justify-between gap-4 border-b border-slate-200">
@@ -163,11 +140,11 @@ function LiveParking() {
             aria-hidden="true"
           />
           <div className="relative grid grid-cols-2 gap-x-5 gap-y-3 sm:gap-x-10 sm:gap-y-4">
-            {mockParkingSlots.map((slot) => (
+            {slots.map((slot) => (
               <ParkingSlot
                 key={slot.id}
-                label={slot.label}
-                status={slot.status}
+                label={slot.name}
+                status={slot.status.toLowerCase() as ParkingSlotStatus}
                 className="min-h-24 bg-white px-2 py-4 sm:min-h-28"
               />
             ))}
@@ -184,14 +161,14 @@ function LiveParking() {
   );
 }
 
-function UpcomingBooking() {
-  const booking = mockBookings.find((item) => item.status === "reserved");
-
+function UpcomingBooking({ booking }: { booking?: ApiReservation }) {
   if (!booking) {
     return null;
   }
 
-  const graceDeadline = new Date(new Date(booking.startsAt).getTime() + 10 * 60 * 1000);
+  const startsAt = `${booking.bookingDate}T${booking.startTime}:00+05:30`;
+  const endsAt = new Date(new Date(startsAt).getTime() + booking.durationMinutes * 60_000);
+  const graceDeadline = new Date(new Date(startsAt).getTime() + 10 * 60 * 1000);
 
   return (
     <Card>
@@ -206,18 +183,18 @@ function UpcomingBooking() {
               Assigned slot
             </p>
             <p className="mt-1 font-mono text-3xl font-bold tracking-tight text-slate-950">
-              {getSlotLabel(booking.slotId)}
+              P{booking.slotNumber}
             </p>
           </div>
-          <StatusBadge status={booking.status} />
+          <StatusBadge status="reserved" />
         </div>
 
         <dl className="mt-6 space-y-4 border-y border-slate-200 py-5">
-          <BookingDetail icon={CalendarClock} label="Date" value={formatDate(booking.startsAt)} />
+          <BookingDetail icon={CalendarClock} label="Date" value={formatDate(startsAt)} />
           <BookingDetail
             icon={Clock3}
             label="Time"
-            value={`${formatTime(booking.startsAt)} – ${formatTime(booking.endsAt)}`}
+            value={`${formatTime(startsAt)} – ${formatTime(endsAt)}`}
           />
           <BookingDetail icon={CarFront} label="Vehicle" value={booking.vehicleNumber} />
         </dl>
@@ -313,10 +290,6 @@ function QuickBooking() {
       </CardContent>
     </Card>
   );
-}
-
-function getSlotLabel(slotId: string): string {
-  return mockParkingSlots.find((slot) => slot.id === slotId)?.label ?? slotId;
 }
 
 function formatDate(value: string | Date): string {

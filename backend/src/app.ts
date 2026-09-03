@@ -1,0 +1,24 @@
+import cors from "cors";
+import express from "express";
+import helmet from "helmet";
+import { env } from "./config/env.js";
+import { errorHandler, notFound } from "./middleware/error.middleware.js";
+import { adminRouter } from "./routes/admin.routes.js";
+import { authRouter } from "./routes/auth.routes.js";
+import { qrRouter } from "./routes/qr.routes.js";
+import { reservationsRouter } from "./routes/reservations.routes.js";
+import { slotsRouter } from "./routes/slots.routes.js";
+
+export const app = express();
+app.disable("x-powered-by");
+app.use(helmet());
+app.use(cors({ origin: env.FRONTEND_ORIGIN, methods: ["GET", "POST", "PATCH", "DELETE"], allowedHeaders: ["Content-Type", "Authorization"] }));
+app.use(express.json({ limit: "100kb" }));
+app.get("/health", (_req, res) => res.json({ status: "ok" }));
+app.use("/api/auth", authRouter);
+app.use("/api/slots", slotsRouter);
+app.use("/api/reservations", reservationsRouter);
+app.use("/api/qr", qrRouter);
+app.use("/api/admin", adminRouter);
+app.use(notFound);
+app.use(errorHandler);

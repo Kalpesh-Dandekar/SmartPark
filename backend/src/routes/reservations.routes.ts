@@ -1,0 +1,10 @@
+import { Router } from "express";
+import { cancel, create, mine, one } from "../controllers/reservations.controller.js";
+import { requireAuth } from "../middleware/auth.middleware.js";
+import { asyncHandler } from "../utils/async-handler.js";
+export const reservationsRouter = Router();
+reservationsRouter.use(asyncHandler(requireAuth));
+reservationsRouter.post("/", asyncHandler(create));
+reservationsRouter.get("/me", asyncHandler(mine));
+reservationsRouter.get("/:id", asyncHandler(one));
+reservationsRouter.patch("/:id/cancel", asyncHandler(cancel));

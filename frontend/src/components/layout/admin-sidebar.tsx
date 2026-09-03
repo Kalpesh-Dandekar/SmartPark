@@ -1,3 +1,5 @@
+"use client";
+
 import {
   Activity,
   CarFront,
@@ -8,8 +10,10 @@ import {
   TriangleAlert,
 } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 import { Brand } from "@/components/shared/brand";
+import { logout } from "@/services/auth";
 
 const items = [
   { label: "Overview", href: "#overview", icon: LayoutDashboard },
@@ -21,6 +25,7 @@ const items = [
 ];
 
 export function AdminSidebar({ onNavigate }: { onNavigate?: () => void }) {
+  const router = useRouter();
   return (
     <div className="flex h-full flex-col bg-slate-950 px-4 py-5 text-white">
       <Link href="/admin/dashboard" onClick={onNavigate} aria-label="SmartPark Admin dashboard" className="w-fit rounded-lg focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-blue-400/40">
@@ -37,7 +42,7 @@ export function AdminSidebar({ onNavigate }: { onNavigate?: () => void }) {
 
       <div className="mt-auto border-t border-slate-800 pt-5">
         <div className="flex items-center gap-3 px-2"><div className="flex size-10 items-center justify-center rounded-full bg-blue-600 text-sm font-bold" aria-hidden="true">AU</div><div><p className="text-sm font-semibold">Admin User</p><p className="text-xs text-slate-400">Administrator</p></div></div>
-        <Link href="/" onClick={onNavigate} className="mt-4 flex h-10 items-center gap-3 rounded-lg px-3 text-sm font-medium text-slate-300 hover:bg-slate-800 hover:text-white focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-blue-400/35"><LogOut className="size-4" aria-hidden="true" />Log out</Link>
+        <button type="button" onClick={async () => { await logout(); onNavigate?.(); router.replace("/"); }} className="mt-4 flex h-10 w-full items-center gap-3 rounded-lg px-3 text-sm font-medium text-slate-300 hover:bg-slate-800 hover:text-white focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-blue-400/35"><LogOut className="size-4" aria-hidden="true" />Log out</button>
       </div>
     </div>
   );

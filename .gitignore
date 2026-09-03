@@ -1,0 +1,14 @@
+# Local environment configuration (templates remain trackable)
+**/.env
+**/.env.local
+**/.env.development.local
+**/.env.test.local
+**/.env.production.local
+!**/.env.example
+
+# Private key and Firebase service-account downloads
+**/*.pem
+**/*.key
+**/*firebase-adminsdk*.json
+**/serviceAccount*.json
+**/service-account*.json

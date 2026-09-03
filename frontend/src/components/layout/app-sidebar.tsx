@@ -8,10 +8,12 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useRouter } from "next/navigation";
 
 import { Brand } from "@/components/shared/brand";
 import { cn } from "@/lib/cn";
 import type { User } from "@/types";
+import { logout } from "@/services/auth";
 
 const navigation = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
@@ -26,6 +28,7 @@ interface AppSidebarProps {
 
 export function AppSidebar({ user, onNavigate }: AppSidebarProps) {
   const pathname = usePathname();
+  const router = useRouter();
   const initials = user.name
     .trim()
     .split(/\s+/)
@@ -88,14 +91,14 @@ export function AppSidebar({ user, onNavigate }: AppSidebarProps) {
             </p>
           </div>
         </div>
-        <Link
-          href="/"
-          onClick={onNavigate}
+        <button
+          type="button"
+          onClick={async () => { await logout(); onNavigate?.(); router.replace("/"); }}
           className="mt-4 flex h-10 items-center gap-3 rounded-lg px-3 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-950 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-blue-600/25"
         >
           <LogOut className="size-4" aria-hidden="true" />
           Log out
-        </Link>
+        </button>
       </div>
     </div>
   );

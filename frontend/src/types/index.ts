@@ -73,3 +73,12 @@ export interface AdminActivity {
   occurredAt: string;
   description: string;
 }
+
+export type ApiSlotStatus = "AVAILABLE" | "RESERVED" | "OCCUPIED";
+export type ApiReservationStatus = "ACTIVE" | "COMPLETED" | "CANCELLED" | "EXPIRED";
+export interface UserProfile { uid: string; name: string; email: string; vehicleNumber?: string; role: "user" | "admin"; createdAt: string; updatedAt: string }
+export interface ApiParkingSlot { id: string; slotNumber: number; name: string; status: ApiSlotStatus; isActive: boolean; currentReservationId: string | null; createdAt: string; updatedAt: string }
+export interface ApiReservation { id: string; userId: string; userName: string; userEmail: string; vehicleNumber: string; slotId: string; slotNumber: number; bookingDate: string; startTime: string; durationMinutes: number; status: ApiReservationStatus; qrToken: string; createdAt: string; updatedAt: string }
+export interface ApiActivityLog { id: string; type: string; userId: string | null; reservationId: string | null; slotId: string | null; message: string; createdAt: string }
+export interface QRVerificationResult { valid: boolean; reservationId?: string; slotId?: string; slotNumber?: number; status?: ApiReservationStatus; reason?: string }
+export interface AdminDashboardData { slots: ApiParkingSlot[]; reservations: ApiReservation[]; activity: ApiActivityLog[]; summary: { total: number; available: number; reserved: number; occupied: number; activeReservations: number; cancelledReservations: number; expiredReservations: number } }

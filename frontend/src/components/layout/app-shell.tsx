@@ -5,6 +5,8 @@ import { useRef, type ReactNode } from "react";
 
 import { AppSidebar } from "@/components/layout/app-sidebar";
 import { Brand } from "@/components/shared/brand";
+import { ProtectedRoute } from "@/features/auth/protected-route";
+import { useAuth } from "@/features/auth/auth-provider";
 import type { User } from "@/types";
 
 interface AppShellProps {
@@ -13,6 +15,8 @@ interface AppShellProps {
 }
 
 export function AppShell({ user, children }: AppShellProps) {
+  const { profile } = useAuth();
+  const resolvedUser: User = profile ? { id: profile.uid, name: profile.name, email: profile.email, vehicleNumber: profile.vehicleNumber, role: profile.role } : user;
   const drawerRef = useRef<HTMLDialogElement>(null);
 
   function openDrawer() {
@@ -24,9 +28,9 @@ export function AppShell({ user, children }: AppShellProps) {
   }
 
   return (
-    <div className="min-h-screen bg-background lg:flex">
+    <ProtectedRoute><div className="min-h-screen bg-background lg:flex">
       <aside className="fixed inset-y-0 left-0 hidden w-64 border-r border-slate-200 bg-white lg:block">
-        <AppSidebar user={user} />
+        <AppSidebar user={resolvedUser} />
       </aside>
 
       <div className="min-w-0 flex-1 lg:pl-64">
@@ -65,9 +69,9 @@ export function AppShell({ user, children }: AppShellProps) {
           >
             <X className="size-5" aria-hidden="true" />
           </button>
-          <AppSidebar user={user} onNavigate={closeDrawer} />
+          <AppSidebar user={resolvedUser} onNavigate={closeDrawer} />
         </div>
       </dialog>
-    </div>
+    </div></ProtectedRoute>
   );
 }

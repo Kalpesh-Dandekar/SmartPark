@@ -1,19 +1,24 @@
 "use client";
 
-import type { FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PasswordField } from "@/features/auth/password-field";
+import { register } from "@/services/auth";
 
 export function RegisterForm() {
   const router = useRouter();
+  const [error, setError] = useState(""); const [loading, setLoading] = useState(false);
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    // Temporary UI-phase navigation; Firebase Authentication will replace this.
-    router.push("/dashboard");
+    setError(""); const data = new FormData(event.currentTarget); const password = String(data.get("password"));
+    if (password !== String(data.get("confirmPassword"))) { setError("Passwords do not match."); return; }
+    setLoading(true);
+    try { await register({ name: String(data.get("name")), email: String(data.get("email")), password, vehicleNumber: String(data.get("vehicleNumber")) }); router.push("/dashboard"); }
+    catch (value) { setError(value instanceof Error ? value.message : "Unable to create account."); setLoading(false); }
   }
 
   return (
@@ -58,11 +63,12 @@ export function RegisterForm() {
           required
         />
       </div>
-      <Button type="submit" size="lg" className="w-full">
-        Create Account
+      {error ? <p role="alert" className="text-sm text-red-700">{error}</p> : null}
+      <Button type="submit" size="lg" className="w-full" disabled={loading}>
+        {loading ? "Creating account…" : "Create Account"}
       </Button>
       <p className="text-center text-xs leading-5 text-slate-500">
-        Account creation will be connected in a future milestone.
+        New accounts are created with standard user access.
       </p>
     </form>
   );

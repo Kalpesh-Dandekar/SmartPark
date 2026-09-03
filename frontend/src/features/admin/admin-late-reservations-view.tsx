@@ -11,7 +11,7 @@ import {
   Users,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { AdminShell } from "@/components/layout/admin-shell";
 import { Container } from "@/components/layout/container";
@@ -22,6 +22,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { mockLateArrivalActivity, mockLateReservations, mockParkingSlots } from "@/data/mock";
 import { cn } from "@/lib/cn";
+import { getAdminDashboard } from "@/services/admin";
 import type { AdminActivity, LateReservation, LateReservationStatus, ParkingSlotStatus } from "@/types";
 
 const lateStyles: Record<LateReservationStatus, { label: string; className: string }> = {
@@ -32,24 +33,22 @@ const lateStyles: Record<LateReservationStatus, { label: string; className: stri
   released: { label: "Released", className: "border-red-200 bg-red-50 text-red-800" },
 };
 
-const reservations = [
-  { id: "SP-1042", user: "Aarav Mehta", vehicle: "MH 12 AB 4582", slot: "P3", time: "10:00 AM", status: "Reserved" },
-  { id: "SP-1044", user: "Priya Shah", vehicle: "MH 02 CD 7711", slot: "P1", time: "11:30 AM", status: "Upcoming" },
-  { id: "SP-1040", user: "Rohan Desai", vehicle: "MH 14 EF 2208", slot: "P4", time: "09:00 AM", status: "Completed" },
-  { id: "SP-1038", user: "Alex Morgan", vehicle: "MH 04 AB 1234", slot: "P5", time: "10:00 AM", status: "Expired" },
-] as const;
+type ReservationRow = { id: string; user: string; vehicle: string; slot: string; time: string; status: "Reserved" | "Upcoming" | "Completed" | "Expired" | "Cancelled" };
 
 const systemDevices = [
-  ["Arduino UNO", "Online"], ["ESP32 Wi-Fi Module", "Online"], ["Entry Ultrasonic", "Active"],
-  ["Slot Ultrasonic", "Active"], ["Gate Servo", "Ready"], ["Stepper Motor", "Ready"], ["LCD Display", "Active"],
+  ["Arduino UNO", "Integration Pending"], ["ESP32 Wi-Fi Module", "Integration Pending"], ["Entry Ultrasonic", "Integration Pending"],
+  ["Slot Ultrasonic", "Integration Pending"], ["Gate Servo", "Integration Pending"], ["Stepper Motor", "Integration Pending"], ["LCD Display", "Integration Pending"],
 ] as const;
 
 export function AdminLateReservationsView() {
   const [lateReservations, setLateReservations] = useState(mockLateReservations);
   const [activity, setActivity] = useState<AdminActivity[]>(mockLateArrivalActivity);
   const [selectedSlotId, setSelectedSlotId] = useState("slot-p3");
+  const [baseSlots, setBaseSlots] = useState<Array<{ id: string; label: string; status: ParkingSlotStatus }>>([]);
+  const [todayReservations, setTodayReservations] = useState<ReservationRow[]>([]);
+  useEffect(() => { getAdminDashboard().then((data) => { setBaseSlots(data.slots.map((slot) => ({ id: slot.id, label: slot.name, status: slot.status.toLowerCase() as ParkingSlotStatus }))); setTodayReservations(data.reservations.map((item) => ({ id: item.id, user: item.userName, vehicle: item.vehicleNumber, slot: `P${item.slotNumber}`, time: item.startTime, status: item.status === "ACTIVE" ? "Reserved" : item.status.charAt(0) + item.status.slice(1).toLowerCase() as ReservationRow["status"] }))); setActivity(data.activity.map((item) => ({ id: item.id, occurredAt: item.createdAt, description: item.message }))); }).catch(() => undefined); }, []);
   const releasedIds = new Set(lateReservations.filter((item) => item.status === "released").map((item) => item.slotId));
-  const liveSlots = mockParkingSlots.map((slot) => releasedIds.has(slot.id) ? { ...slot, status: "available" as const } : slot);
+  const liveSlots = baseSlots.map((slot) => releasedIds.has(slot.id) ? { ...slot, status: "available" as const } : slot);
   const selectedSlot = liveSlots.find((slot) => slot.id === selectedSlotId) ?? liveSlots[0];
 
   function updateReservation(id: string, status: LateReservationStatus) {
@@ -69,7 +68,7 @@ export function AdminLateReservationsView() {
     { label: "Available", value: liveSlots.filter((slot) => slot.status === "available").length, icon: CheckCircle2, style: "bg-emerald-50 text-emerald-700" },
     { label: "Occupied", value: liveSlots.filter((slot) => slot.status === "occupied").length, icon: CarFront, style: "bg-red-50 text-red-700" },
     { label: "Reserved", value: liveSlots.filter((slot) => slot.status === "reserved").length, icon: CalendarClock, style: "bg-blue-50 text-blue-700" },
-    { label: "Vehicles Today", value: 18, icon: Users, style: "bg-violet-50 text-violet-700" },
+    { label: "Vehicles Today", value: todayReservations.length, icon: Users, style: "bg-violet-50 text-violet-700" },
   ];
 
   return (
@@ -85,7 +84,7 @@ export function AdminLateReservationsView() {
 
           <div className="mt-5 grid items-start gap-5 xl:grid-cols-[minmax(0,1.25fr)_minmax(22rem,0.75fr)]">
             <LiveParking slots={liveSlots} selectedId={selectedSlotId} onSelect={setSelectedSlotId} selectedSlot={selectedSlot} lateReservations={lateReservations} />
-            <TodayReservations />
+            <TodayReservations reservations={todayReservations} />
           </div>
 
           <LateReservations reservations={lateReservations} onUpdate={updateReservation} />
@@ -109,7 +108,7 @@ function LiveParking({ slots, selectedId, onSelect, selectedSlot, lateReservatio
   return <section id="live-parking" className="scroll-mt-6" aria-labelledby="live-parking-title"><Card className="overflow-hidden"><CardHeader className="flex flex-row items-start justify-between gap-4 border-b border-slate-200"><div><CardTitle id="live-parking-title" className="text-lg">Live Parking</CardTitle><p className="mt-1 text-sm text-slate-600">Select a slot to inspect its current state.</p></div><div className="text-right"><StatusBadge status="online" /><p className="mt-1 text-xs text-slate-500">Updated just now</p></div></CardHeader><CardContent className="bg-slate-50/65 p-4 sm:p-5"><div className="mb-4 flex items-center gap-3"><span className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold uppercase tracking-wide text-slate-600"><CarFront className="size-4" aria-hidden="true" />Entry</span><span className="h-px flex-1 border-t border-dashed border-slate-300" aria-hidden="true" /><Route className="size-4 text-slate-400" aria-hidden="true" /></div><div className="relative grid grid-cols-2 gap-3 sm:gap-x-8">{slots.map((slot) => <ParkingSlot key={slot.id} label={slot.label} status={slot.status} selected={selectedId === slot.id} onClick={() => onSelect(slot.id)} allowUnavailableSelection className="min-h-20 bg-white py-3 sm:min-h-24" />)}</div><div className="mt-4 flex flex-wrap justify-center gap-2 border-t border-slate-200 pt-4"><StatusBadge status="available" /><StatusBadge status="occupied" /><StatusBadge status="reserved" /></div><div className="mt-4 rounded-xl border border-slate-200 bg-white p-4"><div className="flex items-center justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Selected Slot</p><h3 className="mt-1 font-mono text-xl font-bold">Slot {selectedSlot.label}</h3></div><StatusBadge status={selectedSlot.status} /></div>{active ? <dl className="mt-4 grid grid-cols-2 gap-3 text-sm"><Detail label="Booking ID" value={active.id} /><Detail label="User" value={active.userName} /><Detail label="Vehicle" value={active.id === "SP-1042" ? "MH 12 AB 4582" : "MH 04 AB 1234"} /><Detail label="Arrival" value={formatTime(active.expectedAt)} /><Detail label="Grace Until" value={formatTime(active.graceUntil)} /></dl> : <p className="mt-3 text-sm text-slate-600">No active reservation.</p>}</div></CardContent></Card></section>;
 }
 
-function TodayReservations() {
+function TodayReservations({ reservations }: { reservations: ReservationRow[] }) {
   return <section id="reservations" className="scroll-mt-6" aria-labelledby="reservations-title"><Card><CardHeader className="border-b border-slate-200"><CardTitle id="reservations-title" className="text-lg">Today&apos;s Reservations</CardTitle><p className="mt-1 text-sm text-slate-600">Four scheduled parking sessions.</p></CardHeader><CardContent className="divide-y divide-slate-100 px-5 pb-0 sm:px-6">{reservations.map((item) => <article key={item.id} className="py-4"><div className="flex items-start justify-between gap-3"><div><p className="text-sm font-semibold text-slate-950">{item.user}</p><p className="mt-0.5 font-mono text-xs text-slate-500">{item.vehicle}</p></div><ReservationBadge status={item.status} /></div><div className="mt-3 flex items-center justify-between text-sm"><span className="font-mono font-bold text-slate-800">{item.slot}</span><span className="text-slate-600">{item.time}</span></div></article>)}</CardContent></Card></section>;
 }
 
@@ -128,6 +127,6 @@ function SystemStatus() {
 
 function Detail({ label, value }: { label: string; value: string }) { return <div><dt className="text-xs text-slate-500">{label}</dt><dd className="mt-0.5 text-sm font-semibold text-slate-800">{value}</dd></div>; }
 function LateBadge({ status }: { status: LateReservationStatus }) { const style = lateStyles[status]; return <span className={cn("inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold", style.className)}>{style.label}</span>; }
-function ReservationBadge({ status }: { status: typeof reservations[number]["status"] }) { const classes = status === "Reserved" ? "border-blue-200 bg-blue-50 text-blue-800" : status === "Completed" ? "border-emerald-200 bg-emerald-50 text-emerald-800" : status === "Expired" ? "border-red-200 bg-red-50 text-red-800" : "border-slate-200 bg-slate-100 text-slate-700"; return <span className={cn("rounded-full border px-2 py-0.5 text-xs font-semibold", classes)}>{status}</span>; }
+function ReservationBadge({ status }: { status: ReservationRow["status"] }) { const classes = status === "Reserved" ? "border-blue-200 bg-blue-50 text-blue-800" : status === "Completed" ? "border-emerald-200 bg-emerald-50 text-emerald-800" : status === "Expired" || status === "Cancelled" ? "border-red-200 bg-red-50 text-red-800" : "border-slate-200 bg-slate-100 text-slate-700"; return <span className={cn("rounded-full border px-2 py-0.5 text-xs font-semibold", classes)}>{status}</span>; }
 function getSlotLabel(slotId: string) { return mockParkingSlots.find((slot) => slot.id === slotId)?.label ?? slotId; }
 function formatTime(value: string | Date) { return new Intl.DateTimeFormat("en-IN", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: "Asia/Kolkata" }).format(new Date(value)); }

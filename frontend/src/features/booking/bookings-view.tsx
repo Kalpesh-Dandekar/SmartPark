@@ -2,7 +2,7 @@
 
 import { CalendarPlus, CheckCircle2, Clock3, QrCode, TriangleAlert, X } from "lucide-react";
 import Link from "next/link";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import QRCode from "react-qr-code";
 
 import { AppShell } from "@/components/layout/app-shell";
@@ -11,14 +11,18 @@ import { PageHeader } from "@/components/layout/page-header";
 import { Button, buttonStyles } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { mockBookings, mockParkingSlots, mockUser } from "@/data/mock";
-import type { Booking, LateReservationStatus } from "@/types";
+import { mockParkingSlots, mockUser } from "@/data/mock";
+import { cancelReservation, getMyReservations } from "@/services/reservations";
+import type { ApiReservation, Booking, LateReservationStatus } from "@/types";
 
 type UserLateArrivalStatus = LateReservationStatus | "on-the-way";
+type BookingView = Booking & { qrToken: string; durationMinutes: number };
 
 export function BookingsView() {
-  const booking = mockBookings.find((item) => item.status === "reserved");
-  const history = mockBookings.filter((item) => item.status !== "reserved");
+  const [bookings, setBookings] = useState<BookingView[]>([]);
+  const [loading, setLoading] = useState(true); const [error, setError] = useState("");
+  const booking = bookings.find((item) => item.status === "reserved");
+  const history = bookings.filter((item) => item.status !== "reserved");
   const [cancelled, setCancelled] = useState(false);
   const dialogRef = useRef<HTMLDialogElement>(null);
 
@@ -26,10 +30,9 @@ export function BookingsView() {
     dialogRef.current?.close();
   }
 
-  function cancelBooking() {
-    setCancelled(true);
-    closeDialog();
-  }
+  useEffect(() => { getMyReservations().then((items) => setBookings(items.map(toBookingView))).catch((value: unknown) => setError(value instanceof Error ? value.message : "Unable to load bookings.")).finally(() => setLoading(false)); }, []);
+
+  async function cancelBooking() { if (!booking) return; setError(""); try { await cancelReservation(booking.id); setCancelled(true); closeDialog(); } catch (value) { setError(value instanceof Error ? value.message : "Unable to cancel reservation."); } }
 
   return (
     <AppShell user={mockUser}>
@@ -41,7 +44,8 @@ export function BookingsView() {
             action={<Link href="/book" className={buttonStyles()}><CalendarPlus className="size-4" aria-hidden="true" />Book Another Slot</Link>}
           />
 
-          {!booking || cancelled ? (
+          {error ? <p role="alert" className="mt-8 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</p> : null}
+          {loading ? <Card className="mt-8"><CardContent className="py-12 text-center text-sm text-slate-600">Loading your reservations…</CardContent></Card> : !booking || cancelled ? (
             <EmptyBooking />
           ) : (
             <div className="mt-8 grid items-start gap-6 lg:grid-cols-[minmax(0,1.2fr)_minmax(18rem,0.8fr)]">
@@ -73,7 +77,7 @@ export function BookingsView() {
   );
 }
 
-function CurrentBooking({ booking, onCancel }: { booking: Booking; onCancel: () => void }) {
+function CurrentBooking({ booking, onCancel }: { booking: BookingView; onCancel: () => void }) {
   const graceDeadline = new Date(new Date(booking.startsAt).getTime() + 10 * 60 * 1000);
   return (
     <Card>
@@ -95,20 +99,20 @@ function CurrentBooking({ booking, onCancel }: { booking: Booking; onCancel: () 
   );
 }
 
-function BookingQr({ booking }: { booking: Booking }) {
+function BookingQr({ booking }: { booking: BookingView }) {
   return (
     <Card>
       <CardHeader className="border-b border-slate-200"><div className="flex items-center gap-2"><QrCode className="size-5 text-blue-700" aria-hidden="true" /><CardTitle>Parking Access QR</CardTitle></div><p className="mt-1 text-sm leading-6 text-slate-600">Scan at the parking entrance to verify your reservation.</p></CardHeader>
       <CardContent className="pt-5 text-center sm:pt-6">
-        <div role="img" aria-label={`Demo parking access QR for booking ${booking.id}`} className="mx-auto w-full max-w-48 rounded-xl border border-slate-200 bg-white p-4"><QRCode value={`SMARTPARK:${booking.id}`} className="h-auto w-full" aria-hidden="true" /></div>
+        <div role="img" aria-label={`Parking access QR for booking ${booking.id}`} className="mx-auto w-full max-w-48 rounded-xl border border-slate-200 bg-white p-4"><QRCode value={`${process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"}/verify/${booking.qrToken}`} className="h-auto w-full" aria-hidden="true" /></div>
         <p className="mt-4 font-mono text-sm font-semibold text-slate-900">Booking ID: {booking.id}</p>
-        <p className="mt-1 text-xs text-slate-500">Demo booking QR</p>
+        <p className="mt-1 text-xs text-slate-500">Present this code at the parking entrance.</p>
       </CardContent>
     </Card>
   );
 }
 
-function LateArrivalPanel({ booking, onCancel }: { booking: Booking; onCancel: () => void }) {
+function LateArrivalPanel({ booking, onCancel }: { booking: BookingView; onCancel: () => void }) {
   const [status, setStatus] = useState<UserLateArrivalStatus>("grace-period");
   const [showRequest, setShowRequest] = useState(false);
   const [extension, setExtension] = useState("10");
@@ -189,7 +193,7 @@ function LateArrivalPanel({ booking, onCancel }: { booking: Booking; onCancel: (
   );
 }
 
-function BookingHistory({ bookings }: { bookings: Booking[] }) {
+function BookingHistory({ bookings }: { bookings: BookingView[] }) {
   return (
     <Card className="mt-6 overflow-hidden">
       <CardHeader className="border-b border-slate-200"><CardTitle>Booking History</CardTitle><p className="mt-1 text-sm text-slate-600">Your recent parking reservations.</p></CardHeader>
@@ -212,3 +216,10 @@ function Detail({ label, value, mono = false }: { label: string; value: string; 
 function getSlotLabel(slotId: string) { return mockParkingSlots.find((slot) => slot.id === slotId)?.label ?? slotId; }
 function formatDate(value: string | Date) { return new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short", year: "numeric", timeZone: "Asia/Kolkata" }).format(new Date(value)); }
 function formatTime(value: string | Date) { return new Intl.DateTimeFormat("en-IN", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: "Asia/Kolkata" }).format(new Date(value)); }
+
+function toBookingView(item: ApiReservation): BookingView {
+  const startsAt = `${item.bookingDate}T${item.startTime}:00+05:30`;
+  const endsAt = new Date(new Date(startsAt).getTime() + item.durationMinutes * 60_000).toISOString();
+  const status = item.status === "ACTIVE" ? "reserved" : item.status.toLowerCase() as Booking["status"];
+  return { id: item.id, userId: item.userId, slotId: item.slotId, vehicleNumber: item.vehicleNumber, startsAt, endsAt, status, qrToken: item.qrToken, durationMinutes: item.durationMinutes };
+}

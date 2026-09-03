@@ -2,7 +2,7 @@
 
 import { CheckCircle2, CarFront, Route } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { AppShell } from "@/components/layout/app-shell";
 import { Container } from "@/components/layout/container";
@@ -12,7 +12,11 @@ import { Button, buttonStyles } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { mockParkingSlots, mockUser } from "@/data/mock";
+import { mockUser } from "@/data/mock";
+import { useAuth } from "@/features/auth/auth-provider";
+import { createReservation } from "@/services/reservations";
+import { getSlots } from "@/services/slots";
+import type { ApiParkingSlot, ApiReservation, ParkingSlotStatus } from "@/types";
 
 const durations = [
   { value: "30", label: "30 minutes" },
@@ -23,17 +27,21 @@ const durations = [
 ];
 
 export function BookSlotView() {
-  const [date, setDate] = useState("2026-08-17");
+  const { profile } = useAuth();
+  const [date, setDate] = useState(() => new Date(Date.now() + 86_400_000).toISOString().slice(0, 10));
   const [arrival, setArrival] = useState("10:00");
   const [duration, setDuration] = useState("120");
-  const [showSlots, setShowSlots] = useState(true);
-  const [selectedSlot, setSelectedSlot] = useState("slot-p4");
-  const [confirmed, setConfirmed] = useState(false);
-  const selected = mockParkingSlots.find((slot) => slot.id === selectedSlot);
+  const [showSlots, setShowSlots] = useState(false);
+  const [selectedSlot, setSelectedSlot] = useState("");
+  const [slots, setSlots] = useState<ApiParkingSlot[]>([]);
+  const [confirmed, setConfirmed] = useState<ApiReservation | null>(null);
+  const [error, setError] = useState(""); const [loading, setLoading] = useState(true);
+  const selected = slots.find((slot) => slot.id === selectedSlot);
+  useEffect(() => { getSlots().then(setSlots).catch((value: unknown) => setError(value instanceof Error ? value.message : "Unable to load slots.")).finally(() => setLoading(false)); }, []);
 
   function findSlots(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setConfirmed(false);
+    setConfirmed(null);
     setShowSlots(true);
   }
 
@@ -87,13 +95,13 @@ export function BookSlotView() {
                       <Route className="size-4 text-slate-400" aria-hidden="true" />
                     </div>
                     <div className="relative grid grid-cols-2 gap-3 sm:gap-x-8 sm:gap-y-4">
-                      {mockParkingSlots.map((slot) => (
+                      {slots.map((slot) => (
                         <ParkingSlot
                           key={slot.id}
-                          label={slot.label}
-                          status={slot.status}
+                          label={slot.name}
+                          status={toUiStatus(slot.status)}
                           selected={selectedSlot === slot.id}
-                          onClick={slot.status === "available" ? () => { setSelectedSlot(slot.id); setConfirmed(false); } : undefined}
+                          onClick={slot.status === "AVAILABLE" ? () => { setSelectedSlot(slot.id); setConfirmed(null); } : undefined}
                           className="min-h-24 bg-white px-2 py-4 sm:min-h-28"
                         />
                       ))}
@@ -112,7 +120,7 @@ export function BookSlotView() {
                 {selected ? (
                   <>
                     <dl className="grid grid-cols-2 gap-x-4 gap-y-5">
-                      <SummaryItem label="Slot" value={selected.label} />
+                      <SummaryItem label="Slot" value={selected.name} />
                       <SummaryItem label="Date" value={formatDate(date)} />
                       <SummaryItem label="Arrival" value={formatTime(arrival)} />
                       <SummaryItem label="Duration" value={durations.find((item) => item.value === duration)?.label ?? duration} />
@@ -121,14 +129,15 @@ export function BookSlotView() {
                     </dl>
                     {confirmed ? (
                       <div className="mt-6 rounded-lg border border-emerald-200 bg-emerald-50 p-4" role="status">
-                        <div className="flex gap-3"><CheckCircle2 className="mt-0.5 size-5 shrink-0 text-emerald-700" aria-hidden="true" /><div><p className="font-semibold text-emerald-950">Reservation Confirmed</p><p className="mt-1 text-sm leading-5 text-emerald-900">Slot {selected.label} has been reserved for your selected time.</p></div></div>
+                        <div className="flex gap-3"><CheckCircle2 className="mt-0.5 size-5 shrink-0 text-emerald-700" aria-hidden="true" /><div><p className="font-semibold text-emerald-950">Reservation Confirmed</p><p className="mt-1 text-sm leading-5 text-emerald-900">Slot {selected.name} has been reserved for your selected time.</p></div></div>
                         <Link href="/bookings" className={buttonStyles({ className: "mt-4 w-full" })}>View My Booking</Link>
                       </div>
                     ) : (
-                      <Button className="mt-6 w-full" onClick={() => setConfirmed(true)}>Confirm Reservation</Button>
+                      <Button className="mt-6 w-full" disabled={loading || !profile} onClick={async () => { setError(""); setLoading(true); try { setConfirmed(await createReservation({ slotId: selected.id, bookingDate: date, startTime: arrival, durationMinutes: Number(duration), vehicleNumber: profile?.vehicleNumber ?? "" })); } catch (value) { setError(value instanceof Error ? value.message : "Unable to reserve slot."); } finally { setLoading(false); } }}>{loading ? "Please wait…" : "Confirm Reservation"}</Button>
                     )}
                   </>
-                ) : <p className="text-sm text-slate-600">Choose an available slot to review your reservation.</p>}
+                ) : <p className="text-sm text-slate-600">{loading ? "Loading parking availability…" : "Choose an available slot to review your reservation."}</p>}
+                {error ? <p role="alert" className="mt-4 text-sm text-red-700">{error}</p> : null}
               </CardContent>
             </Card>
           </div>
@@ -137,6 +146,8 @@ export function BookSlotView() {
     </AppShell>
   );
 }
+
+function toUiStatus(status: ApiParkingSlot["status"]): ParkingSlotStatus { return status.toLowerCase() as ParkingSlotStatus; }
 
 function SummaryItem({ label, value }: { label: string; value: string }) {
   return <div><dt className="text-xs font-medium text-slate-500">{label}</dt><dd className="mt-1 text-sm font-semibold text-slate-950">{value}</dd></div>;
