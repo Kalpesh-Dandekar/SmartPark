@@ -11,7 +11,7 @@ import {
   Users,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { AdminShell } from "@/components/layout/admin-shell";
 import { Container } from "@/components/layout/container";
@@ -20,10 +20,9 @@ import { ParkingSlot } from "@/components/shared/parking-slot";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { mockLateArrivalActivity, mockLateReservations, mockParkingSlots } from "@/data/mock";
 import { cn } from "@/lib/cn";
-import { getAdminDashboard } from "@/services/admin";
-import type { AdminActivity, LateReservation, LateReservationStatus, ParkingSlotStatus } from "@/types";
+import { expireReservation, getAdminDashboard } from "@/services/admin";
+import type { AdminActivity, ApiReservation, LateReservation, LateReservationStatus, ParkingSlotStatus } from "@/types";
 
 const lateStyles: Record<LateReservationStatus, { label: string; className: string }> = {
   "grace-period": { label: "Grace Period", className: "border-amber-200 bg-amber-50 text-amber-900" },
@@ -41,26 +40,33 @@ const systemDevices = [
 ] as const;
 
 export function AdminLateReservationsView() {
-  const [lateReservations, setLateReservations] = useState(mockLateReservations);
-  const [activity, setActivity] = useState<AdminActivity[]>(mockLateArrivalActivity);
-  const [selectedSlotId, setSelectedSlotId] = useState("slot-p3");
+  const [lateReservations, setLateReservations] = useState<LateReservation[]>([]);
+  const [activity, setActivity] = useState<AdminActivity[]>([]);
+  const [selectedSlotId, setSelectedSlotId] = useState("SLOT-1");
   const [baseSlots, setBaseSlots] = useState<Array<{ id: string; label: string; status: ParkingSlotStatus }>>([]);
   const [todayReservations, setTodayReservations] = useState<ReservationRow[]>([]);
-  useEffect(() => { getAdminDashboard().then((data) => { setBaseSlots(data.slots.map((slot) => ({ id: slot.id, label: slot.name, status: slot.status.toLowerCase() as ParkingSlotStatus }))); setTodayReservations(data.reservations.map((item) => ({ id: item.id, user: item.userName, vehicle: item.vehicleNumber, slot: `P${item.slotNumber}`, time: item.startTime, status: item.status === "ACTIVE" ? "Reserved" : item.status.charAt(0) + item.status.slice(1).toLowerCase() as ReservationRow["status"] }))); setActivity(data.activity.map((item) => ({ id: item.id, occurredAt: item.createdAt, description: item.message }))); }).catch(() => undefined); }, []);
+  const [error, setError] = useState("");
+  const loadDashboard = useCallback(async () => {
+    const data = await getAdminDashboard();
+    setBaseSlots(data.slots.map((slot) => ({ id: slot.id, label: slot.name, status: slot.status.toLowerCase() as ParkingSlotStatus })));
+    setTodayReservations(data.reservations.map((item) => ({ id: item.id, user: item.userName, vehicle: item.vehicleNumber, slot: `P${item.slotNumber}`, time: item.startTime, status: item.status === "ACTIVE" ? "Reserved" : item.status.charAt(0) + item.status.slice(1).toLowerCase() as ReservationRow["status"] })));
+    setLateReservations(data.reservations.filter(isLateActiveReservation).map(toLateReservation));
+    setActivity(data.activity.map((item) => ({ id: item.id, occurredAt: item.createdAt, description: item.message })));
+  }, []);
+  useEffect(() => { getAdminDashboard().then((data) => {
+    setBaseSlots(data.slots.map((slot) => ({ id: slot.id, label: slot.name, status: slot.status.toLowerCase() as ParkingSlotStatus })));
+    setTodayReservations(data.reservations.map((item) => ({ id: item.id, user: item.userName, vehicle: item.vehicleNumber, slot: `P${item.slotNumber}`, time: item.startTime, status: item.status === "ACTIVE" ? "Reserved" : item.status.charAt(0) + item.status.slice(1).toLowerCase() as ReservationRow["status"] })));
+    setLateReservations(data.reservations.filter(isLateActiveReservation).map(toLateReservation));
+    setActivity(data.activity.map((item) => ({ id: item.id, occurredAt: item.createdAt, description: item.message })));
+  }).catch(() => setError("Unable to load live admin data.")); }, []);
   const releasedIds = new Set(lateReservations.filter((item) => item.status === "released").map((item) => item.slotId));
   const liveSlots = baseSlots.map((slot) => releasedIds.has(slot.id) ? { ...slot, status: "available" as const } : slot);
   const selectedSlot = liveSlots.find((slot) => slot.id === selectedSlotId) ?? liveSlots[0];
 
-  function updateReservation(id: string, status: LateReservationStatus) {
-    const reservation = lateReservations.find((item) => item.id === id);
-    if (!reservation) return;
-    setLateReservations((current) => current.map((item) => item.id === id ? { ...item, status } : item));
-    const slot = getSlotLabel(reservation.slotId);
-    setActivity((current) => [{
-      id: `local-${id}-${status}`,
-      occurredAt: "2026-08-17T10:09:00+05:30",
-      description: status === "extended" ? `Extension approved for ${id} until 10:20 AM` : `Reservation released; ${slot} returned to availability`,
-    }, ...current]);
+  async function releaseReservation(id: string) {
+    setError("");
+    try { await expireReservation(id); await loadDashboard(); }
+    catch (value) { setError(value instanceof Error ? value.message : "Unable to expire reservation."); }
   }
 
   const metrics = [
@@ -75,7 +81,8 @@ export function AdminLateReservationsView() {
     <AdminShell>
       <main className="min-w-0">
         <Container className="py-7 sm:py-9 lg:py-10">
-          <PageHeader title="Admin Dashboard" description="Monitor parking operations, reservations, and system health." action={<span className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-white px-3 py-1.5 text-xs font-semibold text-emerald-800"><span className="size-2 rounded-full bg-emerald-500" aria-hidden="true" />System Online</span>} />
+          <PageHeader title="Admin Dashboard" description="Monitor parking operations, reservations, and system health." action={<span className="inline-flex items-center gap-2 rounded-full border border-blue-200 bg-white px-3 py-1.5 text-xs font-semibold text-blue-800"><span className="size-2 rounded-full bg-blue-500" aria-hidden="true" />Web System Online</span>} />
+          {error ? <p role="alert" className="mt-5 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</p> : null}
 
           <section id="overview" className="mt-7 scroll-mt-6" aria-labelledby="overview-title">
             <h2 id="overview-title" className="sr-only">Overview</h2>
@@ -87,7 +94,7 @@ export function AdminLateReservationsView() {
             <TodayReservations reservations={todayReservations} />
           </div>
 
-          <LateReservations reservations={lateReservations} onUpdate={updateReservation} />
+          <LateReservations reservations={lateReservations} onRelease={releaseReservation} />
 
           <div className="mt-5 grid items-start gap-5 xl:grid-cols-[minmax(0,1.1fr)_minmax(20rem,0.9fr)]">
             <RecentActivity items={activity} />
@@ -109,24 +116,25 @@ function LiveParking({ slots, selectedId, onSelect, selectedSlot, lateReservatio
 }
 
 function TodayReservations({ reservations }: { reservations: ReservationRow[] }) {
-  return <section id="reservations" className="scroll-mt-6" aria-labelledby="reservations-title"><Card><CardHeader className="border-b border-slate-200"><CardTitle id="reservations-title" className="text-lg">Today&apos;s Reservations</CardTitle><p className="mt-1 text-sm text-slate-600">Four scheduled parking sessions.</p></CardHeader><CardContent className="divide-y divide-slate-100 px-5 pb-0 sm:px-6">{reservations.map((item) => <article key={item.id} className="py-4"><div className="flex items-start justify-between gap-3"><div><p className="text-sm font-semibold text-slate-950">{item.user}</p><p className="mt-0.5 font-mono text-xs text-slate-500">{item.vehicle}</p></div><ReservationBadge status={item.status} /></div><div className="mt-3 flex items-center justify-between text-sm"><span className="font-mono font-bold text-slate-800">{item.slot}</span><span className="text-slate-600">{item.time}</span></div></article>)}</CardContent></Card></section>;
+  return <section id="reservations" className="scroll-mt-6" aria-labelledby="reservations-title"><Card><CardHeader className="border-b border-slate-200"><CardTitle id="reservations-title" className="text-lg">Reservations</CardTitle><p className="mt-1 text-sm text-slate-600">Live reservation records from SmartPark.</p></CardHeader><CardContent className="divide-y divide-slate-100 px-5 pb-0 sm:px-6">{reservations.length ? reservations.map((item) => <article key={item.id} className="py-4"><div className="flex items-start justify-between gap-3"><div><p className="text-sm font-semibold text-slate-950">{item.user}</p><p className="mt-0.5 font-mono text-xs text-slate-500">{item.vehicle}</p></div><ReservationBadge status={item.status} /></div><div className="mt-3 flex items-center justify-between text-sm"><span className="font-mono font-bold text-slate-800">{item.slot}</span><span className="text-slate-600">{item.time}</span></div></article>) : <p className="py-6 text-sm text-slate-600">No reservations found.</p>}</CardContent></Card></section>;
 }
 
-function LateReservations({ reservations: items, onUpdate }: { reservations: LateReservation[]; onUpdate: (id: string, status: LateReservationStatus) => void }) {
-  return <section id="late-reservations" className="mt-5 scroll-mt-6" aria-labelledby="late-title"><Card><CardHeader className="flex flex-row items-center justify-between gap-4 border-b border-slate-200"><div><CardTitle id="late-title" className="text-lg">Late / At-Risk Reservations</CardTitle><p className="mt-1 text-sm text-slate-600">Review grace periods and extension requests.</p></div><span className="rounded-full bg-amber-100 px-2.5 py-1 text-sm font-bold text-amber-900">{items.filter((item) => item.status !== "released").length}</span></CardHeader><CardContent className="divide-y divide-slate-100 px-5 pb-0 sm:px-6">{items.map((item) => <article key={item.id} className="grid gap-3 py-4 lg:grid-cols-[1.1fr_.65fr_.8fr_.8fr_1fr_auto] lg:items-center"><div><p className="text-sm font-semibold">{item.userName}</p><p className="font-mono text-xs text-slate-500">{item.id}</p></div><p className="font-mono text-sm font-bold">{getSlotLabel(item.slotId)}</p><Detail label="Expected" value={formatTime(item.expectedAt)} /><Detail label="Grace Until" value={formatTime(item.graceUntil)} /><div><LateBadge status={item.status} />{item.status === "extension-requested" ? <p className="mt-1 text-xs font-medium text-amber-800">+{item.requestedExtensionMinutes} minutes requested</p> : null}{item.status === "extended" ? <p className="mt-1 text-xs font-medium text-emerald-700">Until 10:20 AM</p> : null}{item.status === "released" ? <p className="mt-1 text-xs font-medium text-red-700">Reservation Released</p> : null}</div><div className="flex flex-wrap gap-2 lg:justify-end">{item.status === "extension-requested" ? <><Button size="sm" onClick={() => onUpdate(item.id, "extended")}>Approve</Button><Button size="sm" variant="outline" onClick={() => onUpdate(item.id, "released")}>Decline</Button></> : null}{item.status === "grace-period" ? <Button size="sm" variant="destructive" onClick={() => onUpdate(item.id, "released")}>Release Slot</Button> : null}</div></article>)}</CardContent></Card></section>;
+function LateReservations({ reservations: items, onRelease }: { reservations: LateReservation[]; onRelease: (id: string) => void }) {
+  return <section id="late-reservations" className="mt-5 scroll-mt-6" aria-labelledby="late-title"><Card><CardHeader className="flex flex-row items-center justify-between gap-4 border-b border-slate-200"><div><CardTitle id="late-title" className="text-lg">Late / At-Risk Reservations</CardTitle><p className="mt-1 text-sm text-slate-600">Active reservations whose arrival time has passed.</p></div><span className="rounded-full bg-amber-100 px-2.5 py-1 text-sm font-bold text-amber-900">{items.length}</span></CardHeader><CardContent className="divide-y divide-slate-100 px-5 pb-0 sm:px-6">{items.length ? items.map((item) => <article key={item.id} className="grid gap-3 py-4 lg:grid-cols-[1.1fr_.65fr_.8fr_.8fr_1fr_auto] lg:items-center"><div><p className="text-sm font-semibold">{item.userName}</p><p className="font-mono text-xs text-slate-500">{item.id}</p></div><p className="font-mono text-sm font-bold">{item.slotId}</p><Detail label="Expected" value={formatTime(item.expectedAt)} /><Detail label="Grace Until" value={formatTime(item.graceUntil)} /><LateBadge status={item.status} /><div className="flex flex-wrap gap-2 lg:justify-end"><Button size="sm" variant="destructive" onClick={() => onRelease(item.id)}>Release Slot</Button></div></article>) : <p className="py-6 text-sm text-slate-600">No late active reservations.</p>}</CardContent></Card></section>;
 }
 
 function RecentActivity({ items }: { items: AdminActivity[] }) {
-  const extras: AdminActivity[] = [{ id: "extra-1", occurredAt: "2026-08-17T09:59:00+05:30", description: "Vehicle detected at entrance" }, { id: "extra-2", occurredAt: "2026-08-17T09:58:00+05:30", description: "Slot P2 occupied" }, { id: "extra-3", occurredAt: "2026-08-17T09:42:00+05:30", description: "Reservation SP-1040 completed" }];
-  return <section id="activity" className="scroll-mt-6" aria-labelledby="activity-title"><Card><CardHeader className="flex flex-row items-center gap-3 border-b border-slate-200"><Activity className="size-5 text-slate-500" aria-hidden="true" /><div><CardTitle id="activity-title">Recent Activity</CardTitle><p className="mt-1 text-sm text-slate-600">Latest operational events.</p></div></CardHeader><CardContent className="divide-y divide-slate-100 px-5 pb-0 sm:px-6">{[...items, ...extras].slice(0, 5).map((item) => <div key={item.id} className="flex items-start gap-4 py-3.5"><time dateTime={item.occurredAt} className="shrink-0 font-mono text-xs font-semibold text-slate-500">{formatTime(item.occurredAt)}</time><span className="mt-1.5 size-2 shrink-0 rounded-full bg-blue-500" aria-hidden="true" /><p className="text-sm text-slate-700">{item.description}</p></div>)}</CardContent></Card></section>;
+  return <section id="activity" className="scroll-mt-6" aria-labelledby="activity-title"><Card><CardHeader className="flex flex-row items-center gap-3 border-b border-slate-200"><Activity className="size-5 text-slate-500" aria-hidden="true" /><div><CardTitle id="activity-title">Recent Activity</CardTitle><p className="mt-1 text-sm text-slate-600">Latest operational events.</p></div></CardHeader><CardContent className="divide-y divide-slate-100 px-5 pb-0 sm:px-6">{items.length ? items.slice(0, 5).map((item) => <div key={item.id} className="flex items-start gap-4 py-3.5"><time dateTime={item.occurredAt} className="shrink-0 font-mono text-xs font-semibold text-slate-500">{formatTime(item.occurredAt)}</time><span className="mt-1.5 size-2 shrink-0 rounded-full bg-blue-500" aria-hidden="true" /><p className="text-sm text-slate-700">{item.description}</p></div>) : <p className="py-6 text-sm text-slate-600">No activity recorded.</p>}</CardContent></Card></section>;
 }
 
 function SystemStatus() {
-  return <section id="system-status" className="scroll-mt-6" aria-labelledby="system-title"><Card><CardHeader className="flex flex-row items-start justify-between gap-3 border-b border-slate-200"><div className="flex gap-3"><RadioTower className="mt-0.5 size-5 text-slate-500" aria-hidden="true" /><div><CardTitle id="system-title">IoT System Status</CardTitle><p className="mt-1 text-sm text-slate-600">Mock hardware health preview.</p></div></div><span className="hidden rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-800 sm:inline-flex">All Systems Normal</span></CardHeader><CardContent className="divide-y divide-slate-100 px-5 pb-0 sm:px-6">{systemDevices.map(([device, state]) => <div key={device} className="flex items-center justify-between gap-4 py-3"><div className="flex items-center gap-2.5"><span className="size-2 rounded-full bg-emerald-500" aria-hidden="true" /><span className="text-sm font-medium text-slate-800">{device}</span></div><span className="text-xs font-semibold text-emerald-700">{state}</span></div>)}</CardContent></Card></section>;
+  return <section id="system-status" className="scroll-mt-6" aria-labelledby="system-title"><Card><CardHeader className="flex flex-row items-start justify-between gap-3 border-b border-slate-200"><div className="flex gap-3"><RadioTower className="mt-0.5 size-5 text-slate-500" aria-hidden="true" /><div><CardTitle id="system-title">IoT System Status</CardTitle><p className="mt-1 text-sm text-slate-600">Hardware integration has not been configured.</p></div></div><span className="hidden rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-800 sm:inline-flex">Integration Pending</span></CardHeader><CardContent className="divide-y divide-slate-100 px-5 pb-0 sm:px-6">{systemDevices.map(([device, state]) => <div key={device} className="flex items-center justify-between gap-4 py-3"><div className="flex items-center gap-2.5"><span className="size-2 rounded-full bg-slate-400" aria-hidden="true" /><span className="text-sm font-medium text-slate-800">{device}</span></div><span className="text-xs font-semibold text-slate-600">{state}</span></div>)}</CardContent></Card></section>;
 }
+
+function isLateActiveReservation(item: Omit<ApiReservation, "qrToken">) { return item.status === "ACTIVE" && new Date(`${item.bookingDate}T${item.startTime}:00+05:30`).getTime() <= Date.now(); }
+function toLateReservation(item: Omit<ApiReservation, "qrToken">): LateReservation { const expectedAt = new Date(`${item.bookingDate}T${item.startTime}:00+05:30`); return { id: item.id, userName: item.userName, slotId: item.slotId, expectedAt: expectedAt.toISOString(), graceUntil: new Date(expectedAt.getTime() + 10 * 60_000).toISOString(), status: "grace-period" }; }
 
 function Detail({ label, value }: { label: string; value: string }) { return <div><dt className="text-xs text-slate-500">{label}</dt><dd className="mt-0.5 text-sm font-semibold text-slate-800">{value}</dd></div>; }
 function LateBadge({ status }: { status: LateReservationStatus }) { const style = lateStyles[status]; return <span className={cn("inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold", style.className)}>{style.label}</span>; }
 function ReservationBadge({ status }: { status: ReservationRow["status"] }) { const classes = status === "Reserved" ? "border-blue-200 bg-blue-50 text-blue-800" : status === "Completed" ? "border-emerald-200 bg-emerald-50 text-emerald-800" : status === "Expired" || status === "Cancelled" ? "border-red-200 bg-red-50 text-red-800" : "border-slate-200 bg-slate-100 text-slate-700"; return <span className={cn("rounded-full border px-2 py-0.5 text-xs font-semibold", classes)}>{status}</span>; }
-function getSlotLabel(slotId: string) { return mockParkingSlots.find((slot) => slot.id === slotId)?.label ?? slotId; }
 function formatTime(value: string | Date) { return new Intl.DateTimeFormat("en-IN", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: "Asia/Kolkata" }).format(new Date(value)); }
