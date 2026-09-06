@@ -12,5 +12,7 @@ service cloud.firestore {
     match /parkingSlots/{slotId} { allow read, write: if false; }
     match /reservations/{reservationId} { allow read, write: if false; }
     match /activityLogs/{activityId} { allow read, write: if false; }
+    match /deviceCommands/{commandId} { allow read, write: if false; }
+    match /deviceEvents/{eventId} { allow read, write: if false; }
   }
 }

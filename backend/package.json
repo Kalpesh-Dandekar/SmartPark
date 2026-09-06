@@ -10,7 +10,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint src --max-warnings=0",
     "seed": "tsx src/scripts/seed.ts",
-    "test": "npm run build && node --test dist/utils/reservation-time.test.js"
+    "test": "npm run build && node --test dist/utils/reservation-time.test.js dist/utils/device-state.test.js dist/middleware/device-auth.middleware.test.js"
   },
   "dependencies": {
     "cors": "^2.8.5",

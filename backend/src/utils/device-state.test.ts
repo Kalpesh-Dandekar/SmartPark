@@ -1,0 +1,48 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { assertAuthorizationState, assertCommandActive, assertParkingState, assertVacancyState, isReusableParkCommand, nextCommandStatus, parkCommandId } from "./device-state.js";
+import { HttpError } from "./http-error.js";
+
+const now = new Date("2026-09-06T10:00:00.000Z");
+const future = new Date("2026-09-06T10:02:00.000Z");
+const past = new Date("2026-09-06T09:58:00.000Z");
+const authorization = { requestingUserId: "user-1", reservationUserId: "user-1", reservationStatus: "ACTIVE" as const, withinWindow: true, reservationId: "reservation-1", reservationSlotId: "SLOT-1", slotId: "SLOT-1", slotStatus: "RESERVED" as const, currentReservationId: "reservation-1" };
+const parking = { commandSlotId: "SLOT-1", eventSlotId: "SLOT-1", commandReservationId: "reservation-1", reservationSlotId: "SLOT-1", reservationStatus: "ACTIVE" as const, slotStatus: "RESERVED" as const, currentReservationId: "reservation-1" };
+const vacancy = { ...parking, slotStatus: "OCCUPIED" as const };
+function code(action: () => void) { try { action(); return "NONE"; } catch (error) { return (error as HttpError).code; } }
+
+test("PARK command id is deterministic per reservation", () => assert.equal(parkCommandId("reservation-1"), parkCommandId("reservation-1")));
+test("different reservations receive different PARK command ids", () => assert.notEqual(parkCommandId("reservation-1"), parkCommandId("reservation-2")));
+test("pending unexpired PARK command is reusable", () => assert.equal(isReusableParkCommand("PENDING", future, now), true));
+test("acknowledged unexpired PARK command is reusable", () => assert.equal(isReusableParkCommand("ACKNOWLEDGED", future, now), true));
+test("completed unexpired PARK command is reusable", () => assert.equal(isReusableParkCommand("COMPLETED", future, now), true));
+test("failed PARK command is not reusable", () => assert.equal(isReusableParkCommand("FAILED", future, now), false));
+test("expired PARK command is not reusable", () => assert.equal(isReusableParkCommand("PENDING", past, now), false));
+test("active command validation accepts an unexpired pending command", () => assert.doesNotThrow(() => assertCommandActive("PENDING", future, now)));
+test("active command validation rejects a stale command", () => assert.equal(code(() => assertCommandActive("PENDING", past, now)), "COMMAND_EXPIRED"));
+test("active command validation rejects a failed command", () => assert.equal(code(() => assertCommandActive("FAILED", future, now)), "COMMAND_INACTIVE"));
+test("acknowledgement changes pending to acknowledged", () => assert.equal(nextCommandStatus("PENDING", "COMMAND_ACKNOWLEDGED"), "ACKNOWLEDGED"));
+test("duplicate acknowledgement is harmless", () => assert.equal(nextCommandStatus("ACKNOWLEDGED", "COMMAND_ACKNOWLEDGED"), "ACKNOWLEDGED"));
+test("acknowledgement rejects a completed command", () => assert.equal(code(() => nextCommandStatus("COMPLETED", "COMMAND_ACKNOWLEDGED")), "INVALID_COMMAND_STATE"));
+test("gate opened completes an acknowledged command", () => assert.equal(nextCommandStatus("ACKNOWLEDGED", "GATE_OPENED"), "COMPLETED"));
+test("duplicate gate opened event is harmless at command state", () => assert.equal(nextCommandStatus("COMPLETED", "GATE_OPENED"), "COMPLETED"));
+test("gate opened rejects an unacknowledged command", () => assert.equal(code(() => nextCommandStatus("PENDING", "GATE_OPENED")), "INVALID_COMMAND_STATE"));
+test("gate failed marks pending command failed", () => assert.equal(nextCommandStatus("PENDING", "GATE_FAILED"), "FAILED"));
+test("gate failed marks acknowledged command failed", () => assert.equal(nextCommandStatus("ACKNOWLEDGED", "GATE_FAILED"), "FAILED"));
+test("duplicate gate failed event is harmless at command state", () => assert.equal(nextCommandStatus("FAILED", "GATE_FAILED"), "FAILED"));
+test("authorization accepts matching active reservation and reserved slot", () => assert.doesNotThrow(() => assertAuthorizationState(authorization)));
+test("authorization rejects another user", () => assert.equal(code(() => assertAuthorizationState({ ...authorization, requestingUserId: "user-2" })), "FORBIDDEN"));
+test("authorization rejects cancelled reservation", () => assert.equal(code(() => assertAuthorizationState({ ...authorization, reservationStatus: "CANCELLED" })), "INVALID_RESERVATION_STATE"));
+test("authorization rejects expired reservation", () => assert.equal(code(() => assertAuthorizationState({ ...authorization, reservationStatus: "EXPIRED" })), "INVALID_RESERVATION_STATE"));
+test("authorization rejects invalid entry time", () => assert.equal(code(() => assertAuthorizationState({ ...authorization, withinWindow: false })), "INVALID_TIME"));
+test("authorization rejects mismatched current reservation", () => assert.equal(code(() => assertAuthorizationState({ ...authorization, currentReservationId: "other" })), "SLOT_MISMATCH"));
+test("parking confirmation accepts matching reserved state", () => assert.doesNotThrow(() => assertParkingState(parking)));
+test("parking confirmation rejects mismatched command slot", () => assert.equal(code(() => assertParkingState({ ...parking, commandSlotId: "SLOT-2" })), "SLOT_MISMATCH"));
+test("parking confirmation rejects inactive reservation", () => assert.equal(code(() => assertParkingState({ ...parking, reservationStatus: "EXPIRED" })), "INVALID_RESERVATION_STATE"));
+test("parking confirmation rejects non-reserved slot", () => assert.equal(code(() => assertParkingState({ ...parking, slotStatus: "AVAILABLE" })), "SLOT_MISMATCH"));
+test("parking confirmation rejects mismatched reservation pointer", () => assert.equal(code(() => assertParkingState({ ...parking, currentReservationId: "other" })), "SLOT_MISMATCH"));
+test("vacancy accepts matching occupied state", () => assert.doesNotThrow(() => assertVacancyState(vacancy)));
+test("vacancy rejects mismatched command slot", () => assert.equal(code(() => assertVacancyState({ ...vacancy, commandSlotId: "SLOT-2" })), "SLOT_MISMATCH"));
+test("vacancy rejects inactive reservation", () => assert.equal(code(() => assertVacancyState({ ...vacancy, reservationStatus: "COMPLETED" })), "INVALID_RESERVATION_STATE"));
+test("vacancy rejects non-occupied slot", () => assert.equal(code(() => assertVacancyState({ ...vacancy, slotStatus: "RESERVED" })), "SLOT_MISMATCH"));
+test("vacancy rejects mismatched reservation pointer", () => assert.equal(code(() => assertVacancyState({ ...vacancy, currentReservationId: "other" })), "SLOT_MISMATCH"));

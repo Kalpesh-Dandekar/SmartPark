@@ -9,14 +9,14 @@ import { Brand } from "@/components/shared/brand";
 import { buttonStyles } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ProtectedRoute } from "@/features/auth/protected-route";
-import { verifyQr } from "@/services/qr";
+import { authorizeQr } from "@/services/qr";
 import type { QRVerificationResult } from "@/types";
 
 export default function VerifyQrPage() {
   const params = useParams<{ token: string }>();
   const [result, setResult] = useState<QRVerificationResult | null>(null);
   const [error, setError] = useState("");
-  useEffect(() => { verifyQr(params.token).then(setResult).catch((value: unknown) => setError(value instanceof Error ? value.message : "QR verification failed.")); }, [params.token]);
+  useEffect(() => { authorizeQr(params.token).then(setResult).catch((value: unknown) => setError(value instanceof Error ? value.message : "QR verification failed.")); }, [params.token]);
 
   return (
     <ProtectedRoute>
