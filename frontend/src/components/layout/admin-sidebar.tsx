@@ -2,12 +2,10 @@
 
 import {
   Activity,
-  CarFront,
   LayoutDashboard,
   LogOut,
   RadioTower,
   TicketCheck,
-  TriangleAlert,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -17,9 +15,7 @@ import { logout } from "@/services/auth";
 
 const items = [
   { label: "Overview", href: "#overview", icon: LayoutDashboard },
-  { label: "Live Parking", href: "#live-parking", icon: CarFront },
   { label: "Reservations", href: "#reservations", icon: TicketCheck },
-  { label: "Late / At-Risk", href: "#late-reservations", icon: TriangleAlert },
   { label: "Activity", href: "#activity", icon: Activity },
   { label: "System Status", href: "#system-status", icon: RadioTower },
 ];
