@@ -1,96 +1,31 @@
 import { randomUUID } from "node:crypto";
-import { FieldValue } from "firebase-admin/firestore";
+import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { db } from "../config/firebase.js";
-import type { Reservation, UserProfile } from "../types/index.js";
+import type { Reservation, StoredReservationStatus, UserProfile } from "../types/index.js";
+import { calculateAvailability, TOTAL_PARKING_CAPACITY } from "../utils/capacity.js";
 import { HttpError } from "../utils/http-error.js";
+import { assertFutureReservation, GRACE_PERIOD_MINUTES, isWithinVerificationWindow, reservationStart } from "../utils/reservation-time.js";
 import { serializeDocument } from "../utils/serialize.js";
-import { assertFutureReservation, isWithinVerificationWindow, reservationStart, GRACE_PERIOD_MINUTES } from "../utils/reservation-time.js";
 import { logActivity } from "./activity.service.js";
 
-interface CreateReservationInput { slotId: string; bookingDate: string; startTime: string; durationMinutes: number; vehicleNumber: string }
+interface CreateReservationInput { bookingDate: string; startTime: string; durationMinutes: number; vehicleNumber: string }
+interface StoredRecord { status: StoredReservationStatus; bookingDate: string; startTime: string; durationMinutes: number; startAt?: FirebaseFirestore.Timestamp; endAt?: FirebaseFirestore.Timestamp; slotId?: string }
+const reservations=db.collection("reservations"); const capacityLock=db.collection("system").doc("parkingCapacity");
 
-export async function createReservation(user: UserProfile, input: CreateReservationInput): Promise<Reservation> {
-  assertFutureReservation(input.bookingDate, input.startTime);
-  const slotRef = db.collection("parkingSlots").doc(input.slotId);
-  const reservationRef = db.collection("reservations").doc();
-  const qrToken = randomUUID();
-  await db.runTransaction(async (transaction) => {
-    const slot = await transaction.get(slotRef);
-    if (!slot.exists) throw new HttpError(404, "Parking slot not found", "SLOT_NOT_FOUND");
-    const slotData = slot.data()!;
-    if (!slotData.isActive) throw new HttpError(409, "Parking slot is inactive", "SLOT_INACTIVE");
-    if (slotData.status !== "AVAILABLE" || slotData.currentReservationId) throw new HttpError(409, "Parking slot is no longer available", "SLOT_UNAVAILABLE");
-    transaction.create(reservationRef, { id: reservationRef.id, userId: user.uid, userName: user.name, userEmail: user.email, vehicleNumber: input.vehicleNumber, slotId: slot.id, slotNumber: slotData.slotNumber, bookingDate: input.bookingDate, startTime: input.startTime, durationMinutes: input.durationMinutes, status: "ACTIVE", qrToken, createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
-    transaction.update(slotRef, { status: "RESERVED", currentReservationId: reservationRef.id, updatedAt: FieldValue.serverTimestamp() });
-  });
-  await logActivity({ type: "RESERVATION_CREATED", userId: user.uid, reservationId: reservationRef.id, slotId: input.slotId, message: `Reservation ${reservationRef.id} created` });
-  return getReservationForUser(reservationRef.id, user.uid);
-}
+function interval(data:StoredRecord){const start=data.startAt?.toDate()??reservationStart(data.bookingDate,data.startTime);const end=data.endAt?.toDate()??new Date(start.getTime()+data.durationMinutes*60000);return {status:data.status,startAt:start,endAt:end}}
+function publicReservation(snapshot:FirebaseFirestore.QueryDocumentSnapshot|FirebaseFirestore.DocumentSnapshot):Reservation { const serialized=serializeDocument<Record<string,unknown>>(snapshot as FirebaseFirestore.QueryDocumentSnapshot); const {slotId: _slotId,slotNumber: _slotNumber,...safe}=serialized; void _slotId;void _slotNumber; const status=safe.status==="ACTIVE"?"BOOKED":safe.status; const startAt=typeof safe.startAt==="string"?safe.startAt:reservationStart(String(safe.bookingDate),String(safe.startTime)).toISOString(); const endAt=typeof safe.endAt==="string"?safe.endAt:new Date(new Date(startAt).getTime()+Number(safe.durationMinutes)*60000).toISOString(); return {...safe,status,startAt,endAt,bookedAt:typeof safe.bookedAt==="string"?safe.bookedAt:String(safe.createdAt)} as unknown as Reservation }
+async function activeRecords(transaction?:FirebaseFirestore.Transaction){const query=reservations.where("status","in",["BOOKED","PARKED","ACTIVE"]);const snap=transaction?await transaction.get(query):await query.get();return snap.docs.map(doc=>interval(doc.data() as StoredRecord))}
 
-export async function listUserReservations(userId: string) {
-  const snapshot = await db.collection("reservations").where("userId", "==", userId).get();
-  return snapshot.docs.map((doc) => serializeDocument<Reservation>(doc)).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-}
+export async function getAvailability(bookingDate:string,startTime:string,durationMinutes:number){assertFutureReservation(bookingDate,startTime);const start=reservationStart(bookingDate,startTime),end=new Date(start.getTime()+durationMinutes*60000);return {...calculateAvailability(await activeRecords(),start,end),requestedStart:start.toISOString(),requestedEnd:end.toISOString()}}
+export async function getParkingStatus(now=new Date()){return calculateAvailability(await activeRecords(),now,new Date(now.getTime()+1))}
 
-export async function getReservationForUser(id: string, userId: string) {
-  const snapshot = await db.collection("reservations").doc(id).get();
-  if (!snapshot.exists) throw new HttpError(404, "Reservation not found", "RESERVATION_NOT_FOUND");
-  const reservation = { id: snapshot.id, ...snapshot.data() } as Reservation;
-  if (reservation.userId !== userId) throw new HttpError(403, "You cannot access this reservation", "FORBIDDEN");
-  return serializeReservation(snapshot);
-}
+export async function createReservation(user:UserProfile,input:CreateReservationInput):Promise<Reservation>{assertFutureReservation(input.bookingDate,input.startTime);const start=reservationStart(input.bookingDate,input.startTime),end=new Date(start.getTime()+input.durationMinutes*60000),ref=reservations.doc(),qrToken=randomUUID();await db.runTransaction(async transaction=>{const lock=await transaction.get(capacityLock);const availability=calculateAvailability(await activeRecords(transaction),start,end);if(availability.available<=0)throw new HttpError(409,"Parking is full for the requested time","CAPACITY_FULL");transaction.set(capacityLock,{totalCapacity:TOTAL_PARKING_CAPACITY,revision:(lock.get("revision")??0)+1,updatedAt:FieldValue.serverTimestamp()},{merge:true});transaction.create(ref,{id:ref.id,userId:user.uid,userName:user.name,userEmail:user.email,vehicleNumber:input.vehicleNumber,bookingDate:input.bookingDate,startTime:input.startTime,durationMinutes:input.durationMinutes,startAt:Timestamp.fromDate(start),endAt:Timestamp.fromDate(end),status:"BOOKED",qrToken,bookedAt:FieldValue.serverTimestamp(),createdAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp()})});await logActivity({type:"RESERVATION_CREATED",userId:user.uid,reservationId:ref.id,message:`Reservation ${ref.id} created`});return getReservationForUser(ref.id,user.uid)}
+export async function listUserReservations(userId:string){const snap=await reservations.where("userId","==",userId).get();return snap.docs.map(publicReservation).sort((a,b)=>b.createdAt.localeCompare(a.createdAt))}
+export async function getReservationForUser(id:string,userId:string){const snap=await reservations.doc(id).get();if(!snap.exists)throw new HttpError(404,"Reservation not found","RESERVATION_NOT_FOUND");if(snap.get("userId")!==userId)throw new HttpError(403,"You cannot access this reservation","FORBIDDEN");return publicReservation(snap)}
 
-export async function cancelReservation(id: string, userId: string) {
-  const reservationRef = db.collection("reservations").doc(id);
-  let slotId = "";
-  await db.runTransaction(async (transaction) => {
-    const reservation = await transaction.get(reservationRef);
-    if (!reservation.exists) throw new HttpError(404, "Reservation not found", "RESERVATION_NOT_FOUND");
-    const data = reservation.data()!;
-    if (data.userId !== userId) throw new HttpError(403, "You cannot cancel this reservation", "FORBIDDEN");
-    if (data.status !== "ACTIVE") throw new HttpError(409, "Only active reservations can be cancelled", "INVALID_STATUS");
-    slotId = data.slotId;
-    const slotRef = db.collection("parkingSlots").doc(slotId);
-    const slot = await transaction.get(slotRef);
-    if (!slot.exists || slot.data()?.currentReservationId !== id) throw new HttpError(409, "Reservation and slot state do not match", "SLOT_MISMATCH");
-    transaction.update(reservationRef, { status: "CANCELLED", updatedAt: FieldValue.serverTimestamp() });
-    transaction.update(slotRef, { status: "AVAILABLE", currentReservationId: null, updatedAt: FieldValue.serverTimestamp() });
-  });
-  await logActivity({ type: "RESERVATION_CANCELLED", userId, reservationId: id, slotId, message: `Reservation ${id} cancelled` });
-  return getReservationForUser(id, userId);
-}
-
-export async function expireReservation(id: string) {
-  const reservationRef = db.collection("reservations").doc(id);
-  let userId = ""; let slotId = "";
-  await db.runTransaction(async (transaction) => {
-    const reservation = await transaction.get(reservationRef);
-    if (!reservation.exists) throw new HttpError(404, "Reservation not found", "RESERVATION_NOT_FOUND");
-    const data = reservation.data()!; userId = data.userId; slotId = data.slotId;
-    if (data.status !== "ACTIVE") throw new HttpError(409, "Only active reservations can expire", "INVALID_STATUS");
-    const deadline = reservationStart(data.bookingDate, data.startTime).getTime() + GRACE_PERIOD_MINUTES * 60_000;
-    if (Date.now() <= deadline) throw new HttpError(409, "Reservation grace period has not expired", "GRACE_ACTIVE");
-    const slotRef = db.collection("parkingSlots").doc(slotId); const slot = await transaction.get(slotRef);
-    if (!slot.exists || slot.data()?.currentReservationId !== id) throw new HttpError(409, "Reservation and slot state do not match", "SLOT_MISMATCH");
-    transaction.update(reservationRef, { status: "EXPIRED", updatedAt: FieldValue.serverTimestamp() });
-    transaction.update(slotRef, { status: "AVAILABLE", currentReservationId: null, updatedAt: FieldValue.serverTimestamp() });
-  });
-  await logActivity({ type: "RESERVATION_EXPIRED", userId, reservationId: id, slotId, message: `Reservation ${id} expired` });
-}
-
-export async function verifyQrToken(token: string) {
-  const query = await db.collection("reservations").where("qrToken", "==", token).limit(1).get();
-  if (query.empty) return { valid: false as const, reason: "INVALID_TOKEN" as const };
-  const reservation = serializeDocument<Reservation>(query.docs[0]!);
-  if (reservation.status === "CANCELLED") return { valid: false as const, reason: "CANCELLED" as const };
-  if (reservation.status === "EXPIRED") return { valid: false as const, reason: "EXPIRED" as const };
-  if (reservation.status !== "ACTIVE" || !isWithinVerificationWindow(reservation.bookingDate, reservation.startTime, reservation.durationMinutes)) return { valid: false as const, reason: "INVALID_TIME" as const };
-  const slot = await db.collection("parkingSlots").doc(reservation.slotId).get();
-  if (!slot.exists || slot.data()?.status !== "RESERVED" || slot.data()?.currentReservationId !== reservation.id) return { valid: false as const, reason: "SLOT_MISMATCH" as const };
-  return { valid: true as const, reservationId: reservation.id, slotId: reservation.slotId, slotNumber: reservation.slotNumber, status: reservation.status };
-}
-
-function serializeReservation(snapshot: FirebaseFirestore.DocumentSnapshot): Reservation {
-  const data = snapshot.data()!;
-  return { id: snapshot.id, ...data, createdAt: data.createdAt?.toDate().toISOString(), updatedAt: data.updatedAt?.toDate().toISOString() } as Reservation;
-}
+async function releaseLegacyUnit(transaction:FirebaseFirestore.Transaction,data:StoredRecord,id:string){if(!data.slotId)return;const ref=db.collection("parkingSlots").doc(data.slotId),snap=await transaction.get(ref);if(snap.exists&&snap.get("currentReservationId")===id)transaction.update(ref,{status:"AVAILABLE",currentReservationId:null,updatedAt:FieldValue.serverTimestamp()})}
+export async function cancelReservation(id:string,userId:string){const ref=reservations.doc(id);await db.runTransaction(async transaction=>{const snap=await transaction.get(ref);if(!snap.exists)throw new HttpError(404,"Reservation not found","RESERVATION_NOT_FOUND");const data=snap.data() as StoredRecord&{userId:string};if(data.userId!==userId)throw new HttpError(403,"You cannot cancel this reservation","FORBIDDEN");if(data.status!=="BOOKED"&&data.status!=="ACTIVE")throw new HttpError(409,"Only booked reservations can be cancelled","INVALID_STATUS");await releaseLegacyUnit(transaction,data,id);transaction.update(ref,{status:"CANCELLED",cancelledAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp()})});await logActivity({type:"RESERVATION_CANCELLED",userId,reservationId:id,message:`Reservation ${id} cancelled`});return getReservationForUser(id,userId)}
+export async function checkoutReservation(id:string,userId:string){const ref=reservations.doc(id);let already=false;await db.runTransaction(async transaction=>{const snap=await transaction.get(ref);if(!snap.exists)throw new HttpError(404,"Reservation not found","RESERVATION_NOT_FOUND");const data=snap.data() as StoredRecord&{userId:string};if(data.userId!==userId)throw new HttpError(403,"You cannot check out this reservation","FORBIDDEN");if(data.status==="COMPLETED"){already=true;return}if(data.status!=="PARKED")throw new HttpError(409,"Only parked reservations can be checked out","INVALID_STATUS");await releaseLegacyUnit(transaction,data,id);transaction.update(ref,{status:"COMPLETED",completedAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp()})});if(!already)await logActivity({type:"RESERVATION_COMPLETED",userId,reservationId:id,message:`Reservation ${id} completed`});return getReservationForUser(id,userId)}
+export async function expireReservation(id:string){const ref=reservations.doc(id);let userId="";await db.runTransaction(async transaction=>{const snap=await transaction.get(ref);if(!snap.exists)throw new HttpError(404,"Reservation not found","RESERVATION_NOT_FOUND");const data=snap.data() as StoredRecord&{userId:string};userId=data.userId;if(data.status!=="BOOKED"&&data.status!=="ACTIVE")throw new HttpError(409,"Only booked reservations can expire","INVALID_STATUS");const deadline=reservationStart(data.bookingDate,data.startTime).getTime()+GRACE_PERIOD_MINUTES*60000;if(Date.now()<=deadline)throw new HttpError(409,"Reservation grace period has not expired","GRACE_ACTIVE");await releaseLegacyUnit(transaction,data,id);transaction.update(ref,{status:"EXPIRED",expiredAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp()})});await logActivity({type:"RESERVATION_EXPIRED",userId,reservationId:id,message:`Reservation ${id} expired`})}
+export async function verifyQrToken(token:string,userId?:string){const query=await reservations.where("qrToken","==",token).limit(1).get();if(query.empty)return {valid:false as const,reason:"INVALID_TOKEN" as const};const doc=query.docs[0]!,data=doc.data() as StoredRecord&{userId:string};if(userId&&data.userId!==userId)throw new HttpError(403,"This QR belongs to another user","FORBIDDEN");const status=data.status==="ACTIVE"?"BOOKED":data.status;if(status==="CANCELLED"||status==="EXPIRED"||status==="COMPLETED")return {valid:false as const,reservationId:doc.id,reason:status as "CANCELLED"|"EXPIRED"|"COMPLETED"};if(!isWithinVerificationWindow(data.bookingDate,data.startTime,data.durationMinutes))return {valid:false as const,reservationId:doc.id,reason:"INVALID_TIME" as const};return {valid:true as const,reservationId:doc.id,status:status as "BOOKED"|"PARKED"}}
+export async function confirmParking(token:string,userId:string){const query=await reservations.where("qrToken","==",token).limit(1).get();if(query.empty)throw new HttpError(404,"Reservation QR token is invalid","INVALID_TOKEN");const ref=query.docs[0]!.ref;let changed=false;await db.runTransaction(async transaction=>{const snap=await transaction.get(ref),data=snap.data() as StoredRecord&{userId:string};if(data.userId!==userId)throw new HttpError(403,"This QR belongs to another user","FORBIDDEN");if(data.status==="PARKED")return;if(data.status!=="BOOKED"&&data.status!=="ACTIVE")throw new HttpError(409,"Only booked reservations can confirm parking","INVALID_STATUS");if(!isWithinVerificationWindow(data.bookingDate,data.startTime,data.durationMinutes))throw new HttpError(409,"Parking confirmation is outside the booking window","INVALID_TIME");transaction.update(ref,{status:"PARKED",parkedAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp()});changed=true});if(changed)await logActivity({type:"PARKING_CONFIRMED",userId,reservationId:ref.id,message:`Parking confirmed for reservation ${ref.id}`});return getReservationForUser(ref.id,userId)}

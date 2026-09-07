@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { cancel, create, mine, one } from "../controllers/reservations.controller.js";
+import { cancel, checkout, create, mine, one } from "../controllers/reservations.controller.js";
 import { requireAuth } from "../middleware/auth.middleware.js";
 import { asyncHandler } from "../utils/async-handler.js";
 export const reservationsRouter = Router();
@@ -8,3 +8,4 @@ reservationsRouter.post("/", asyncHandler(create));
 reservationsRouter.get("/me", asyncHandler(mine));
 reservationsRouter.get("/:id", asyncHandler(one));
 reservationsRouter.patch("/:id/cancel", asyncHandler(cancel));
+reservationsRouter.patch("/:id/checkout", asyncHandler(checkout));

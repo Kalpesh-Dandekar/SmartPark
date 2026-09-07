@@ -14,7 +14,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   async function refreshProfile() { setProfile(await getProfile()); }
-  useEffect(() => onAuthStateChanged(getFirebaseAuth(), async (user) => { setFirebaseUser(user); if (user) { try { setProfile(await getProfile()); } catch { setProfile(null); } } else setProfile(null); setLoading(false); }), []);
+  useEffect(() => onAuthStateChanged(getFirebaseAuth(), async (user) => { setFirebaseUser(user); if (user) { try { const token = await user.getIdToken(); setProfile(await getProfile(token)); } catch { setProfile(null); } } else setProfile(null); setLoading(false); }), []);
   const value = useMemo(() => ({ firebaseUser, profile, loading, refreshProfile }), [firebaseUser, profile, loading]);
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

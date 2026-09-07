@@ -1,168 +1,18 @@
 "use client";
-
-import { CheckCircle2, CarFront, Route } from "lucide-react";
+import { CalendarCheck2, CheckCircle2, CircleParking } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
-
+import { useState } from "react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Container } from "@/components/layout/container";
 import { PageHeader } from "@/components/layout/page-header";
-import { ParkingSlot } from "@/components/shared/parking-slot";
 import { Button, buttonStyles } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { StatusBadge } from "@/components/ui/status-badge";
 import { mockUser } from "@/data/mock";
 import { useAuth } from "@/features/auth/auth-provider";
+import { getParkingAvailability } from "@/services/parking";
 import { createReservation } from "@/services/reservations";
-import { getSlots } from "@/services/slots";
-import type { ApiParkingSlot, ApiReservation, ParkingSlotStatus } from "@/types";
-
-const durations = [
-  { value: "30", label: "30 minutes" },
-  { value: "60", label: "1 hour" },
-  { value: "120", label: "2 hours" },
-  { value: "180", label: "3 hours" },
-  { value: "240", label: "4 hours" },
-];
-
-export function BookSlotView() {
-  const { profile } = useAuth();
-  const [date, setDate] = useState(() => new Date(Date.now() + 86_400_000).toISOString().slice(0, 10));
-  const [arrival, setArrival] = useState("10:00");
-  const [duration, setDuration] = useState("120");
-  const [showSlots, setShowSlots] = useState(false);
-  const [selectedSlot, setSelectedSlot] = useState("");
-  const [slots, setSlots] = useState<ApiParkingSlot[]>([]);
-  const [confirmed, setConfirmed] = useState<ApiReservation | null>(null);
-  const [error, setError] = useState(""); const [loading, setLoading] = useState(true);
-  const selected = slots.find((slot) => slot.id === selectedSlot);
-  useEffect(() => { getSlots().then(setSlots).catch((value: unknown) => setError(value instanceof Error ? value.message : "Unable to load slots.")).finally(() => setLoading(false)); }, []);
-
-  function findSlots(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setConfirmed(null);
-    setShowSlots(true);
-  }
-
-  return (
-    <AppShell user={mockUser}>
-      <main className="min-w-0">
-        <Container className="py-8 sm:py-10 lg:py-12">
-          <PageHeader
-            title="Book a Slot"
-            description="Choose when you're arriving and reserve an available parking space."
-          />
-
-          <div className="mt-8 grid items-start gap-6 xl:grid-cols-[minmax(0,1.5fr)_minmax(19rem,0.7fr)]">
-            <div className="space-y-6">
-              <Card>
-                <CardHeader className="border-b border-slate-200">
-                  <CardTitle>Reservation Details</CardTitle>
-                  <p className="mt-1 text-sm text-slate-600">Set your arrival details to preview availability.</p>
-                </CardHeader>
-                <CardContent className="pt-5 sm:pt-6">
-                  <form onSubmit={findSlots} className="grid gap-5 sm:grid-cols-3">
-                    <Input label="Date" type="date" value={date} onChange={(event) => setDate(event.target.value)} required />
-                    <Input label="Arrival Time" type="time" value={arrival} onChange={(event) => setArrival(event.target.value)} required />
-                    <label className="block text-sm font-medium text-slate-800">
-                      Expected Duration
-                      <select
-                        value={duration}
-                        onChange={(event) => setDuration(event.target.value)}
-                        className="mt-2 h-11 w-full rounded-lg border border-slate-300 bg-white px-3.5 text-base text-slate-950 outline-none focus:border-blue-600 focus:ring-3 focus:ring-blue-600/15 sm:text-sm"
-                      >
-                        {durations.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
-                      </select>
-                    </label>
-                    <Button type="submit" className="sm:col-span-3 sm:w-fit">Find Available Slots</Button>
-                  </form>
-                </CardContent>
-              </Card>
-
-              {showSlots ? (
-                <Card className="overflow-hidden">
-                  <CardHeader className="border-b border-slate-200">
-                    <CardTitle>Available Slots</CardTitle>
-                    <p className="mt-1 text-sm text-slate-600">Select one of the currently available parking spaces.</p>
-                  </CardHeader>
-                  <CardContent className="bg-slate-50/60 p-4 sm:p-6">
-                    <div className="mb-5 flex items-center gap-3" aria-label="Parking entry lane">
-                      <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold uppercase tracking-wide text-slate-600">
-                        <CarFront className="size-4" aria-hidden="true" /> Entry
-                      </div>
-                      <div className="h-px flex-1 border-t border-dashed border-slate-300" aria-hidden="true" />
-                      <Route className="size-4 text-slate-400" aria-hidden="true" />
-                    </div>
-                    <div className="relative grid grid-cols-2 gap-3 sm:gap-x-8 sm:gap-y-4">
-                      {slots.map((slot) => (
-                        <ParkingSlot
-                          key={slot.id}
-                          label={slot.name}
-                          status={toUiStatus(slot.status)}
-                          selected={selectedSlot === slot.id}
-                          onClick={slot.status === "AVAILABLE" ? () => { setSelectedSlot(slot.id); setConfirmed(null); } : undefined}
-                          className="min-h-24 bg-white px-2 py-4 sm:min-h-28"
-                        />
-                      ))}
-                    </div>
-                    <div className="mt-5 flex flex-wrap justify-center gap-2 border-t border-slate-200 pt-4">
-                      <StatusBadge status="available" /><StatusBadge status="occupied" /><StatusBadge status="reserved" />
-                    </div>
-                  </CardContent>
-                </Card>
-              ) : null}
-            </div>
-
-            <Card className="xl:sticky xl:top-6">
-              <CardHeader className="border-b border-slate-200"><CardTitle>Reservation Summary</CardTitle></CardHeader>
-              <CardContent className="pt-5 sm:pt-6">
-                {selected ? (
-                  <>
-                    <dl className="grid grid-cols-2 gap-x-4 gap-y-5">
-                      <SummaryItem label="Slot" value={selected.name} />
-                      <SummaryItem label="Date" value={formatDate(date)} />
-                      <SummaryItem label="Arrival" value={formatTime(arrival)} />
-                      <SummaryItem label="Duration" value={durations.find((item) => item.value === duration)?.label ?? duration} />
-                      <SummaryItem label="Grace Period" value="10 minutes" />
-                      <SummaryItem label="Arrive Before" value={addMinutes(arrival, 10)} />
-                    </dl>
-                    {confirmed ? (
-                      <div className="mt-6 rounded-lg border border-emerald-200 bg-emerald-50 p-4" role="status">
-                        <div className="flex gap-3"><CheckCircle2 className="mt-0.5 size-5 shrink-0 text-emerald-700" aria-hidden="true" /><div><p className="font-semibold text-emerald-950">Reservation Confirmed</p><p className="mt-1 text-sm leading-5 text-emerald-900">Slot {selected.name} has been reserved for your selected time.</p></div></div>
-                        <Link href="/bookings" className={buttonStyles({ className: "mt-4 w-full" })}>View My Booking</Link>
-                      </div>
-                    ) : (
-                      <Button className="mt-6 w-full" disabled={loading || !profile} onClick={async () => { setError(""); setLoading(true); try { setConfirmed(await createReservation({ slotId: selected.id, bookingDate: date, startTime: arrival, durationMinutes: Number(duration), vehicleNumber: profile?.vehicleNumber ?? "" })); } catch (value) { setError(value instanceof Error ? value.message : "Unable to reserve slot."); } finally { setLoading(false); } }}>{loading ? "Please wait…" : "Confirm Reservation"}</Button>
-                    )}
-                  </>
-                ) : <p className="text-sm text-slate-600">{loading ? "Loading parking availability…" : "Choose an available slot to review your reservation."}</p>}
-                {error ? <p role="alert" className="mt-4 text-sm text-red-700">{error}</p> : null}
-              </CardContent>
-            </Card>
-          </div>
-        </Container>
-      </main>
-    </AppShell>
-  );
-}
-
-function toUiStatus(status: ApiParkingSlot["status"]): ParkingSlotStatus { return status.toLowerCase() as ParkingSlotStatus; }
-
-function SummaryItem({ label, value }: { label: string; value: string }) {
-  return <div><dt className="text-xs font-medium text-slate-500">{label}</dt><dd className="mt-1 text-sm font-semibold text-slate-950">{value}</dd></div>;
-}
-
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short", year: "numeric", timeZone: "Asia/Kolkata" }).format(new Date(`${value}T00:00:00+05:30`));
-}
-
-function formatTime(value: string) {
-  const [hour, minute] = value.split(":").map(Number);
-  return new Intl.DateTimeFormat("en-IN", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: "UTC" }).format(new Date(Date.UTC(2026, 0, 1, hour, minute)));
-}
-
-function addMinutes(value: string, minutes: number) {
-  const [hour, minute] = value.split(":").map(Number);
-  return new Intl.DateTimeFormat("en-IN", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: "UTC" }).format(new Date(Date.UTC(2026, 0, 1, hour, minute + minutes)));
-}
+import type { ApiReservation, ParkingAvailability } from "@/types";
+const durations=[{value:"30",label:"30 minutes"},{value:"60",label:"1 hour"},{value:"120",label:"2 hours"},{value:"180",label:"3 hours"},{value:"240",label:"4 hours"}];
+export function BookSlotView(){const {profile}=useAuth();const [date,setDate]=useState(()=>new Date(Date.now()+86400000).toISOString().slice(0,10));const [time,setTime]=useState("10:00");const [duration,setDuration]=useState("120");const [availability,setAvailability]=useState<ParkingAvailability|null>(null);const [confirmed,setConfirmed]=useState<ApiReservation|null>(null);const [loading,setLoading]=useState(false);const [error,setError]=useState("");const durationLabel=durations.find(d=>d.value===duration)?.label??duration;async function check(){setLoading(true);setError("");try{setAvailability(await getParkingAvailability({date,startTime:time,durationMinutes:Number(duration)}));setConfirmed(null)}catch(e){setError(e instanceof Error?e.message:"Unable to check availability.")}finally{setLoading(false)}}async function reserve(){if(!availability?.available||!profile)return;setLoading(true);setError("");try{setConfirmed(await createReservation({bookingDate:date,startTime:time,durationMinutes:Number(duration),vehicleNumber:profile.vehicleNumber??""}));setAvailability(a=>a?{...a,available:Math.max(0,a.available-1),reserved:a.reserved+1}:a)}catch(e){setError(e instanceof Error?e.message:"Unable to reserve parking.")}finally{setLoading(false)}}return <AppShell user={{...mockUser,...profile}}><main className="min-w-0"><Container className="py-8 sm:py-10 lg:py-12"><PageHeader title="Book Parking" description="Reserve one parking space for your preferred date and time."/><div className="mt-8 grid items-start gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(20rem,0.65fr)]"><div className="space-y-6"><Card><CardHeader className="border-b border-slate-200"><CardTitle>Reservation details</CardTitle><p className="mt-1 text-sm text-slate-600">Choose when you plan to park.</p></CardHeader><CardContent className="p-5 sm:p-6"><form onSubmit={e=>{e.preventDefault();void check()}} className="grid gap-5 sm:grid-cols-2"><Input label="Booking date" type="date" value={date} onChange={e=>{setDate(e.target.value);setAvailability(null)}} required/><Input label="Start time" type="time" value={time} onChange={e=>{setTime(e.target.value);setAvailability(null)}} required/><label className="block text-sm font-medium text-slate-800">Duration<select value={duration} onChange={e=>{setDuration(e.target.value);setAvailability(null)}} className="mt-2 h-11 w-full rounded-lg border border-slate-300 bg-white px-3.5 outline-none focus:border-blue-600 focus:ring-3 focus:ring-blue-600/15">{durations.map(d=><option key={d.value} value={d.value}>{d.label}</option>)}</select></label><Input label="Vehicle" value={profile?.vehicleNumber??""} readOnly helperText={profile?.vehicleNumber?"From your SmartPark profile.":"Add a vehicle before booking."}/><Button type="submit" className="sm:col-span-2 sm:w-fit" disabled={loading}>Check Parking Availability</Button></form></CardContent></Card>{availability&&<Card><CardHeader className="border-b border-slate-200"><CardTitle>Parking availability</CardTitle><p className="mt-1 text-sm text-slate-600">For the selected reservation period.</p></CardHeader><CardContent className="p-5 sm:p-6"><div className="flex items-center justify-between gap-5"><div><p className={`text-2xl font-bold ${availability.available?"text-emerald-700":"text-red-700"}`}>{availability.available?`${availability.available} spaces available`:"Parking is full"}</p><p className="mt-2 text-sm text-slate-600">{formatDate(date)} at {formatTime(time)}</p></div><CircleParking className="size-12 text-blue-700"/></div><dl className="mt-6 grid grid-cols-3 gap-3 border-t border-slate-200 pt-5 text-center"><Capacity label="Total" value={availability.totalCapacity}/><Capacity label="Reserved" value={availability.reserved}/><Capacity label="Parked" value={availability.occupied}/></dl><p className="mt-5 rounded-lg bg-slate-50 p-3 text-xs leading-5 text-slate-600">Availability excludes terminal and non-overlapping reservations.</p></CardContent></Card>}</div><Card className="xl:sticky xl:top-6"><CardHeader className="border-b border-slate-200"><CardTitle>Booking summary</CardTitle></CardHeader><CardContent className="p-5 sm:p-6">{availability?<><dl className="grid grid-cols-2 gap-5"><Detail label="Date" value={formatDate(date)}/><Detail label="Time" value={formatTime(time)}/><Detail label="Duration" value={durationLabel}/><Detail label="Vehicle" value={profile?.vehicleNumber||"Not configured"}/><Detail label="Parking space" value="1 reservation"/><Detail label="Available after booking" value={availability.available?String(Math.max(0,availability.available-1)):"—"}/></dl>{confirmed?<div className="mt-6 rounded-lg border border-emerald-200 bg-emerald-50 p-4" role="status"><div className="flex gap-3"><CheckCircle2 className="size-5 shrink-0 text-emerald-700"/><div><p className="font-semibold text-emerald-950">Parking reserved successfully</p><p className="mt-1 text-sm text-emerald-900">Status: Booked. Your QR is ready.</p></div></div><Link href="/bookings" className={buttonStyles({className:"mt-4 w-full"})}>View Booking &amp; QR</Link></div>:<Button className="mt-6 w-full" disabled={loading||!availability.available||!profile?.vehicleNumber} onClick={reserve}><CalendarCheck2 className="size-4"/>Reserve Parking</Button>}</>:<div className="py-8 text-center"><CalendarCheck2 className="mx-auto size-9 text-slate-400"/><p className="mt-3 text-sm text-slate-600">Check availability to review your reservation.</p></div>}{error&&<p role="alert" className="mt-4 text-sm text-red-700">{error}</p>}<p className="mt-6 border-t border-slate-200 pt-5 text-xs leading-5 text-slate-600">Your reservation guarantees capacity. SmartPark&apos;s hardware finds an available physical position when you arrive.</p></CardContent></Card></div></Container></main></AppShell>}
+function Capacity({label,value}:{label:string;value:number}){return <div><dt className="text-xs text-slate-500">{label}</dt><dd className="mt-1 text-xl font-bold">{value}</dd></div>}function Detail({label,value}:{label:string;value:string}){return <div><dt className="text-xs text-slate-500">{label}</dt><dd className="mt-1 text-sm font-semibold">{value}</dd></div>}function formatDate(v:string){return new Intl.DateTimeFormat("en-IN",{day:"numeric",month:"short",year:"numeric",timeZone:"Asia/Kolkata"}).format(new Date(`${v}T00:00:00+05:30`))}function formatTime(v:string){const [h,m]=v.split(":").map(Number);return new Intl.DateTimeFormat("en-IN",{hour:"numeric",minute:"2-digit",hour12:true,timeZone:"UTC"}).format(new Date(Date.UTC(2026,0,1,h,m)))}

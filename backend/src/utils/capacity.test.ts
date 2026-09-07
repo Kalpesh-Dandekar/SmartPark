@@ -1,0 +1,12 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { calculateAvailability, intervalsOverlap } from "./capacity.js";
+const requestedStart=new Date("2030-01-01T10:00:00Z"), requestedEnd=new Date("2030-01-01T11:00:00Z");
+const record=(status:"BOOKED"|"PARKED"|"COMPLETED"|"CANCELLED"|"EXPIRED"|"ACTIVE",start="2030-01-01T10:15:00Z",end="2030-01-01T10:45:00Z")=>({status,startAt:new Date(start),endAt:new Date(end)});
+test("empty facility has four available",()=>assert.equal(calculateAvailability([],requestedStart,requestedEnd).available,4));
+test("BOOKED and legacy ACTIVE consume reserved capacity",()=>assert.deepEqual(calculateAvailability([record("BOOKED"),record("ACTIVE")],requestedStart,requestedEnd),{totalCapacity:4,reserved:2,occupied:0,available:2}));
+test("PARKED consumes occupied capacity",()=>assert.deepEqual(calculateAvailability([record("PARKED")],requestedStart,requestedEnd),{totalCapacity:4,reserved:0,occupied:1,available:3}));
+test("terminal statuses do not consume capacity",()=>assert.equal(calculateAvailability([record("COMPLETED"),record("CANCELLED"),record("EXPIRED")],requestedStart,requestedEnd).available,4));
+test("non-overlapping intervals are excluded",()=>assert.equal(calculateAvailability([record("BOOKED","2030-01-01T11:00:00Z","2030-01-01T12:00:00Z")],requestedStart,requestedEnd).available,4));
+test("four overlapping reservations fill capacity",()=>assert.equal(calculateAvailability(Array.from({length:4},()=>record("BOOKED")),requestedStart,requestedEnd).available,0));
+test("overlap uses strict interval boundaries",()=>{assert.equal(intervalsOverlap(requestedStart,requestedEnd,new Date("2030-01-01T11:00:00Z"),new Date("2030-01-01T12:00:00Z")),false);assert.equal(intervalsOverlap(requestedStart,requestedEnd,new Date("2030-01-01T10:59:00Z"),new Date("2030-01-01T12:00:00Z")),true)});

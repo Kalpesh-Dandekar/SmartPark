@@ -17,7 +17,7 @@ import { logout } from "@/services/auth";
 
 const navigation = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  { label: "Book a Slot", href: "/book", icon: CalendarPlus },
+  { label: "Book Parking", href: "/book", icon: CalendarPlus },
   { label: "My Bookings", href: "/bookings", icon: TicketCheck },
 ];
 

@@ -9,6 +9,7 @@ export type SmartParkStatus =
   | "online"
   | "offline"
   | "completed"
+  | "parked"
   | "cancelled"
   | "expired"
   | "warning";
@@ -75,11 +76,12 @@ export interface AdminActivity {
 }
 
 export type ApiSlotStatus = "AVAILABLE" | "RESERVED" | "OCCUPIED";
-export type ApiReservationStatus = "ACTIVE" | "COMPLETED" | "CANCELLED" | "EXPIRED";
+export type ApiReservationStatus = "BOOKED" | "PARKED" | "COMPLETED" | "CANCELLED" | "EXPIRED" | "ACTIVE";
 export interface UserProfile { uid: string; name: string; email: string; vehicleNumber?: string; role: "user" | "admin"; createdAt: string; updatedAt: string }
 export interface ApiParkingSlot { id: string; slotNumber: number; name: string; status: ApiSlotStatus; isActive: boolean; currentReservationId: string | null; createdAt: string; updatedAt: string }
-export interface ApiReservation { id: string; userId: string; userName: string; userEmail: string; vehicleNumber: string; slotId: string; slotNumber: number; bookingDate: string; startTime: string; durationMinutes: number; status: ApiReservationStatus; qrToken: string; createdAt: string; updatedAt: string }
+export interface ApiReservation { id: string; userId: string; userName: string; userEmail: string; vehicleNumber: string; bookingDate: string; startTime: string; durationMinutes: number; startAt: string; endAt: string; status: ApiReservationStatus; qrToken: string; bookedAt: string; parkedAt?: string; completedAt?: string; cancelledAt?: string; expiredAt?: string; createdAt: string; updatedAt: string; /** Legacy admin compatibility only; omitted by current user APIs. */ slotId: string; /** Legacy admin compatibility only; omitted by current user APIs. */ slotNumber: number }
+export interface ParkingAvailability { totalCapacity: number; reserved: number; occupied: number; available: number; requestedStart: string; requestedEnd: string }
 export interface ApiActivityLog { id: string; type: string; userId: string | null; reservationId: string | null; slotId: string | null; message: string; createdAt: string }
 export interface QRVerificationResult { valid: boolean; reservationId?: string; slotId?: string; slotNumber?: number; status?: ApiReservationStatus; reason?: string }
 export interface QRParkingAuthorization extends QRVerificationResult { command: { commandId: string; type: "PARK"; slotId: string; reservationId: string; status: "PENDING" | "ACKNOWLEDGED" | "COMPLETED"; expiresAt: string }; reused: boolean }
-export interface AdminDashboardData { slots: ApiParkingSlot[]; reservations: Array<Omit<ApiReservation, "qrToken">>; activity: ApiActivityLog[]; summary: { total: number; available: number; reserved: number; occupied: number; activeReservations: number; cancelledReservations: number; expiredReservations: number } }
+export interface AdminDashboardData { slots: ApiParkingSlot[]; reservations: Array<Omit<ApiReservation, "qrToken" | "slotId" | "slotNumber"> & { slotId: string; slotNumber: number }>; activity: ApiActivityLog[]; summary: { total: number; available: number; reserved: number; occupied: number; activeReservations: number; cancelledReservations: number; expiredReservations: number } }

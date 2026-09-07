@@ -57,6 +57,12 @@ export const statusStyles: Record<SmartParkStatus, StatusStyle> = {
     dot: "bg-emerald-500",
     slot: "border-emerald-200 bg-emerald-50 text-emerald-950",
   },
+  parked: {
+    label: "Parked",
+    badge: "border-amber-200 bg-amber-50 text-amber-900",
+    dot: "bg-amber-500",
+    slot: "border-amber-200 bg-amber-50 text-amber-950",
+  },
   cancelled: {
     label: "Cancelled",
     badge: "border-red-200 bg-red-50 text-red-800",

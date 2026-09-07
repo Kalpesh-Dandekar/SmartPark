@@ -9,6 +9,7 @@ import { authRouter } from "./routes/auth.routes.js";
 import { qrRouter } from "./routes/qr.routes.js";
 import { reservationsRouter } from "./routes/reservations.routes.js";
 import { slotsRouter } from "./routes/slots.routes.js";
+import { parkingRouter } from "./routes/parking.routes.js";
 
 export const app = express();
 app.disable("x-powered-by");
@@ -18,6 +19,7 @@ app.use(express.json({ limit: "100kb" }));
 app.get("/health", (_req, res) => res.json({ status: "ok" }));
 app.use("/api/auth", authRouter);
 app.use("/api/slots", slotsRouter);
+app.use("/api/parking", parkingRouter);
 app.use("/api/reservations", reservationsRouter);
 app.use("/api/qr", qrRouter);
 app.use("/api/admin", adminRouter);
