@@ -1,6 +1,8 @@
 import type { Request, Response } from "express";
 import { z } from "zod";
 import { getNextCommand, processDeviceEvent } from "../services/device.service.js";
+import { recordTelemetry } from "../services/telemetry.service.js";
+import { telemetrySchema } from "../utils/telemetry.js";
 
 const eventSchema = z.object({
   eventId: z.string().trim().min(8).max(128).regex(/^[A-Za-z0-9_-]+$/),
@@ -20,4 +22,8 @@ export async function nextCommand(req: Request, res: Response) {
 
 export async function deviceEvent(req: Request, res: Response) {
   res.json({ data: await processDeviceEvent(req.deviceId!, eventSchema.parse(req.body)) });
+}
+
+export async function telemetry(req: Request, res: Response) {
+  res.json({ data: await recordTelemetry(req.deviceId!, telemetrySchema.parse(req.body)) });
 }

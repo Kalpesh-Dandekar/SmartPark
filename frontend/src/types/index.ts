@@ -90,5 +90,5 @@ export interface AdminDashboardData {
   reservations: AdminReservation[];
   activity: Array<Omit<ApiActivityLog, "slotId">>;
   counts: { booked: number; parked: number; completed: number; completedToday: number; cancelled: number; expired: number };
-  device: { lastActivityAt: string; lastEventType: string } | null;
+  device: { deviceId: string; lastActivityAt: string; lastEventType: string } | null;
 }

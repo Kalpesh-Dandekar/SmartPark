@@ -12,8 +12,10 @@ export interface ActivityLog { id: string; type: string; userId: string | null; 
 export interface QRVerificationResult { valid: boolean; reservationId?: string; status?: ReservationStatus; reason?: "INVALID_TOKEN" | "CANCELLED" | "EXPIRED" | "COMPLETED" | "INVALID_TIME" }
 export type DeviceCommandStatus = "PENDING" | "ACKNOWLEDGED" | "COMPLETED" | "FAILED" | "EXPIRED";
 export type DeviceEventType = "COMMAND_ACKNOWLEDGED" | "GATE_OPENED" | "GATE_FAILED" | "PARKING_CONFIRMED" | "SLOT_VACATED";
+export type TelemetryEventType = "PARKING_DETECTED" | "SYSTEM_READY";
 export interface DeviceCommand { id: string; deviceId: string; type: "PARK"; reservationId: string; slotId: string; status: DeviceCommandStatus; createdAt: string; expiresAt: string; acknowledgedAt?: string; completedAt?: string; failureReason?: string }
 export interface DeviceEventInput { eventId: string; type: DeviceEventType; commandId: string; slotId: string; failureReason?: string }
+export interface TelemetryEventInput { eventId: string; type: TelemetryEventType }
 
 declare global {
   // Express requires namespace declaration merging for authenticated request context.

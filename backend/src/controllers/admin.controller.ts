@@ -20,7 +20,7 @@ export async function dashboard(_req: Request, res: Response) {
     reservations: reservations.map(normalizeAdminReservation),
     activity: activitySnap.docs.map((doc) => serializeDocument<ActivityLog>(doc)).filter(isAdminActivity).map(sanitizeAdminActivity),
     counts: countReservationStatuses(reservations),
-    device: latestDeviceEvent ? { lastActivityAt: latestDeviceEvent.createdAt, lastEventType: latestDeviceEvent.type } : null,
+    device: latestDeviceEvent ? { deviceId: latestDeviceEvent.deviceId, lastActivityAt: latestDeviceEvent.createdAt, lastEventType: latestDeviceEvent.type } : null,
   } });
 }
 export async function expire(req: Request, res: Response) { await expireReservation(String(req.params.id)); res.status(204).send(); }
