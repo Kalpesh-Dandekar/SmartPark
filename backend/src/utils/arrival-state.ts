@@ -8,6 +8,24 @@ export function requiresParkingDetection(arrivalFlowVersion: unknown, arrivalSta
   return arrivalFlowVersion === 1 || typeof arrivalState === "string";
 }
 
+export function parkingConfirmationDecision(input: {
+  ownerId: string;
+  requesterId: string;
+  status: StoredReservationStatus;
+  arrivalFlowVersion?: unknown;
+  arrivalState?: unknown;
+}) {
+  if (input.ownerId !== input.requesterId) return "FORBIDDEN" as const;
+  if (input.status === "PARKED") return "IDEMPOTENT" as const;
+  if (!isBookedForArrival(input.status)) return "INVALID_STATUS" as const;
+  if (requiresParkingDetection(input.arrivalFlowVersion, input.arrivalState) && input.arrivalState !== "PARKING_DETECTED") return "PARKING_NOT_DETECTED" as const;
+  return "CONFIRM" as const;
+}
+
+export function parkingConfirmationUpdate(timestamp: unknown) {
+  return { status: "PARKED" as const, arrivalState: "CONFIRMED" as const, parkedAt: timestamp, updatedAt: timestamp };
+}
+
 export function canAssociateParkingDetection(input: {
   reservationExists: boolean;
   reservationStatus?: StoredReservationStatus;

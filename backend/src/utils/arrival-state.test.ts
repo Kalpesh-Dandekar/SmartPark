@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { canAssociateParkingDetection, isBookedForArrival, requiresParkingDetection } from "./arrival-state.js";
+import { canAssociateParkingDetection, isBookedForArrival, parkingConfirmationDecision, parkingConfirmationUpdate, requiresParkingDetection } from "./arrival-state.js";
 
 test("arrival verification accepts canonical BOOKED and legacy ACTIVE only", () => {
   assert.equal(isBookedForArrival("BOOKED"), true);
@@ -25,4 +25,21 @@ test("parking detection association rejects missing, stale, completed, or alread
   assert.equal(canAssociateParkingDetection({ ...valid, reservationStatus: "CANCELLED" }, 1000), false);
   assert.equal(canAssociateParkingDetection({ ...valid, reservationStatus: "EXPIRED" }, 1000), false);
   assert.equal(canAssociateParkingDetection({ ...valid, reservationArrivalState: "PARKING_DETECTED" }, 1000), false);
+});
+
+test("authenticated owner can confirm only after hardware detection", () => {
+  assert.equal(parkingConfirmationDecision({ ownerId: "u1", requesterId: "u1", status: "BOOKED", arrivalFlowVersion: 1, arrivalState: "PARKING_DETECTED" }), "CONFIRM");
+  assert.equal(parkingConfirmationDecision({ ownerId: "u1", requesterId: "u1", status: "BOOKED", arrivalFlowVersion: 1, arrivalState: "AWAITING_HARDWARE" }), "PARKING_NOT_DETECTED");
+});
+
+test("another user cannot confirm a reservation", () => {
+  assert.equal(parkingConfirmationDecision({ ownerId: "u1", requesterId: "u2", status: "BOOKED", arrivalFlowVersion: 1, arrivalState: "PARKING_DETECTED" }), "FORBIDDEN");
+});
+
+test("repeated parking confirmation remains idempotent", () => {
+  assert.equal(parkingConfirmationDecision({ ownerId: "u1", requesterId: "u1", status: "PARKED", arrivalFlowVersion: 1, arrivalState: "CONFIRMED" }), "IDEMPOTENT");
+});
+
+test("parking confirmation update records BOOKED to PARKED lifecycle fields", () => {
+  assert.deepEqual(parkingConfirmationUpdate("server-time"), { status: "PARKED", arrivalState: "CONFIRMED", parkedAt: "server-time", updatedAt: "server-time" });
 });
