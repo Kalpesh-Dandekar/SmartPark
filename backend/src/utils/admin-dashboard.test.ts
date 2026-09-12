@@ -31,7 +31,17 @@ test("admin activity hides legacy physical slot identity", () => {
 
 test("admin activity presents reservation lifecycle events separately from device events", () => {
   assert.equal(isAdminActivity({ id: "a1", type: "PARKING_CONFIRMED", userId: "u1", reservationId: "r1", slotId: null, message: "Parking confirmed", createdAt: "" }), true);
-  assert.equal(isAdminActivity({ id: "a2", type: "GATE_OPENED", userId: null, reservationId: "r1", slotId: "SLOT-1", message: "Gate opened", createdAt: "" }), false);
+  assert.equal(isAdminActivity({ id: "a2", type: "ARRIVAL_VERIFIED", userId: "u1", reservationId: "r1", slotId: null, message: "Arrival verified", createdAt: "" }), true);
+  assert.equal(isAdminActivity({ id: "a3", type: "PARKING_DETECTED", userId: "u1", reservationId: "r1", slotId: null, message: "Parking detected", createdAt: "" }), true);
+  assert.equal(isAdminActivity({ id: "a4", type: "GATE_OPENED", userId: null, reservationId: "r1", slotId: "SLOT-1", message: "Gate opened", createdAt: "" }), false);
+});
+
+test("admin reservation serialization preserves valid optional arrival state without requiring it", () => {
+  const current = normalizeAdminReservation({ ...base, arrivalState: "PARKING_DETECTED", parkingDetectedAt: "2030-01-01T04:45:00.000Z" });
+  const legacy = normalizeAdminReservation(base);
+  assert.equal(current.arrivalState, "PARKING_DETECTED");
+  assert.equal(current.parkingDetectedAt, "2030-01-01T04:45:00.000Z");
+  assert.equal(legacy.arrivalState, undefined);
 });
 
 test("admin dashboard contract requires capacity, lifecycle counts, collections, and device state", () => {

@@ -16,3 +16,4 @@ export async function getAdminDashboard() {
   return data;
 }
 export const expireReservation = (id: string) => apiRequest<void>(`/api/admin/reservations/${id}/expire`, { method: "POST" });
+export const verifyReservationArrival = (id: string) => apiRequest<{ reservationId: string; arrivalState: "AWAITING_HARDWARE"; idempotent: boolean }>(`/api/admin/reservations/${id}/verify-arrival`, { method: "POST" });

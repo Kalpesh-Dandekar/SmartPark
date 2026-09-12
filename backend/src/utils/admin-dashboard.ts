@@ -25,7 +25,7 @@ export function sanitizeAdminActivity(activity: ActivityLog): Omit<ActivityLog, 
   return safe;
 }
 
-export const ADMIN_ACTIVITY_TYPES = ["RESERVATION_CREATED", "PARKING_CONFIRMED", "RESERVATION_COMPLETED", "RESERVATION_CANCELLED", "RESERVATION_EXPIRED"];
+export const ADMIN_ACTIVITY_TYPES = ["RESERVATION_CREATED", "ARRIVAL_VERIFIED", "PARKING_DETECTED", "PARKING_CONFIRMED", "RESERVATION_COMPLETED", "RESERVATION_CANCELLED", "RESERVATION_EXPIRED"];
 export function isAdminActivity(activity: ActivityLog) { return ADMIN_ACTIVITY_TYPES.includes(activity.type); }
 
 export function countReservationStatuses(reservations: Array<{ status: StoredReservationStatus; completedAt?: string }>, now = new Date()) {

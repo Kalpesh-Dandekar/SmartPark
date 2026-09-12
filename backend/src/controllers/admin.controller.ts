@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import { db } from "../config/firebase.js";
 import { expireReservation } from "../services/reservation.service.js";
+import { verifyArrival } from "../services/arrival.service.js";
 import { serializeDocument } from "../utils/serialize.js";
 import { getParkingStatus } from "../services/reservation.service.js";
 import { countReservationStatuses, isAdminActivity, normalizeAdminReservation, sanitizeAdminActivity } from "../utils/admin-dashboard.js";
@@ -24,3 +25,6 @@ export async function dashboard(_req: Request, res: Response) {
   } });
 }
 export async function expire(req: Request, res: Response) { await expireReservation(String(req.params.id)); res.status(204).send(); }
+export async function verifyReservationArrival(req: Request, res: Response) {
+  res.json({ data: await verifyArrival(String(req.params.id), req.auth!.uid) });
+}

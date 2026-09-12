@@ -11,7 +11,7 @@
     "lint": "eslint src --max-warnings=0",
     "seed": "tsx src/scripts/seed.ts",
     "admin:provision": "tsx src/scripts/provision-admin.ts",
-    "test": "npm run build && node --test dist/utils/reservation-time.test.js dist/utils/capacity.test.js dist/utils/admin-dashboard.test.js dist/utils/device-state.test.js dist/utils/telemetry.test.js dist/middleware/device-auth.middleware.test.js dist/middleware/admin.middleware.test.js dist/services/admin-provisioning.service.test.js dist/controllers/auth.controller.test.js"
+    "test": "npm run build && node --test dist/utils/reservation-time.test.js dist/utils/capacity.test.js dist/utils/admin-dashboard.test.js dist/utils/device-state.test.js dist/utils/telemetry.test.js dist/utils/arrival-state.test.js dist/middleware/device-auth.middleware.test.js dist/middleware/admin.middleware.test.js dist/services/admin-provisioning.service.test.js dist/controllers/auth.controller.test.js"
   },
   "dependencies": {
     "cors": "^2.8.5",
